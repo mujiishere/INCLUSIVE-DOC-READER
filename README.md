@@ -2,8 +2,6 @@
 
 > A web-based multilingual OCR system for processing scanned PDFs and images in regional Indian languages.
 
-**Course:** 22AIE311 Software Engineering | Amrita Vishwa Vidyapeetham  
-**Team:** Adhwaith B Pillai · Dano Aby Alex · N Mujeeb Rahman
 
 ---
 
