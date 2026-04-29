@@ -1,0 +1,56 @@
+/* Basic styles to keep pages readable and beginner-friendly. */
+body {
+    margin: 0;
+    font-family: Georgia, "Times New Roman", serif;
+    color: #2a2520;
+    background: linear-gradient(180deg, #f7f4ec 0%, #f3efe4 100%);
+}
+
+.container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 16px;
+}
+
+.navbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: #1f3a2f;
+    color: #fff;
+}
+
+.navbar a {
+    color: #fff;
+    text-decoration: none;
+}
+
+.card {
+    background: #fff;
+    border: 1px solid #d9d2bf;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+input,
+button,
+textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px;
+    margin-top: 8px;
+    margin-bottom: 12px;
+}
+
+button {
+    background: #1f3a2f;
+    color: #fff;
+    border: 0;
+    cursor: pointer;
+}
+
+mark {
+    background: #ffe082;
+}

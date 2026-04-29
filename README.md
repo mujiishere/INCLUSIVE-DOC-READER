@@ -1,154 +1,131 @@
-# 📄 Inclusive Document Reader
+# Inclusive Document Reader
 
-> A web-based multilingual OCR system for processing scanned PDFs and images in regional Indian languages.
+Beginner-friendly full-stack starter codebase for uploading scanned files, running placeholder OCR, storing extracted text, and searching documents.
 
+## Project Scope (Current Starter)
 
----
+This repository currently includes a clean scaffold for:
 
-## 🧠 What It Does
+- User registration and login (DRF token auth)
+- Uploading image/PDF files
+- Placeholder OCR function (`run_ocr`) ready to be replaced by custom AI
+- Saving extracted text in PostgreSQL
+- Listing, viewing, and searching documents
+- React pages and services wired to backend endpoint structure
 
-Accepts scanned PDFs/images → detects language (Malayalam, Tamil, Hindi, Urdu, English, etc.) → extracts text via multilingual OCR → enables full-text search, keyword highlighting, tagging, and structured export.
-
----
-
-## 🏗️ Architecture
-
-```
-┌─────────────────────────────────────┐
-│        FRONTEND (React + Vite)      │
-│  Upload │ Search │ Highlight │ Tags │
-└──────────────────┬──────────────────┘
-                   │ REST API
-┌──────────────────▼──────────────────┐
-│       BACKEND (FastAPI / Python)    │
-│   Auth │ Routing │ Pipeline Control │
-└──────┬───────────────────┬──────────┘
-       │                   │
-┌──────▼──────┐   ┌────────▼──────────┐
-│  OCR Engine │   │   PostgreSQL DB   │
-│  Tesseract  │   │  Text+Tags+Meta   │
-│  OpenCV     │   └────────┬──────────┘
-│  langdetect │            │
-└─────────────┘   ┌────────▼──────────┐
-                  │  Elasticsearch    │
-                  │  Full-text index  │
-                  └───────────────────┘
-```
-
----
-
-## 🚀 Quick Start
-
-### Prerequisites
-- Python 3.10+, Node.js 18+, Docker, Tesseract 5.x
-
-```bash
-# Install Tesseract with language packs
-sudo apt install tesseract-ocr tesseract-ocr-mal tesseract-ocr-tam tesseract-ocr-hin tesseract-ocr-urd
-```
-
-### Run with Docker (Recommended)
-```bash
-git clone https://github.com/<your-username>/inclusive-doc-reader.git
-cd inclusive-doc-reader
-docker-compose up --build
-```
-
-- Frontend: http://localhost:5173  
-- Backend API: http://localhost:8000  
-- API Docs: http://localhost:8000/docs
-
-### Manual Setup
-```bash
-# Backend
-cd backend && python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env   # fill in your values
-alembic upgrade head
-uvicorn app.main:app --reload --port 8000
-
-# Frontend (new terminal)
-cd frontend && npm install && npm run dev
-```
-
----
-
-## 📁 Project Structure
-
-```
-inclusive-doc-reader/
-├── backend/
-│   ├── app/
-│   │   ├── main.py              # FastAPI entry point
-│   │   ├── routes/              # upload, search, documents, auth
-│   │   ├── services/            # OCR, preprocessing, lang detect, indexing
-│   │   ├── models/              # SQLAlchemy ORM models
-│   │   └── utils/               # PDF & file helpers
-│   ├── tests/
-│   ├── requirements.txt
-│   └── Dockerfile
-├── frontend/
-│   ├── src/
-│   │   ├── components/          # UploadZone, DocumentViewer, SearchBar, etc.
-│   │   ├── pages/               # Home, Dashboard, Login
-│   │   └── services/api.js      # Axios API layer
-│   └── Dockerfile
-├── docker-compose.yml
-└── docs/
-```
-
----
-
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Layer | Technology |
-|-------|-----------|
-| Frontend | React + Vite |
-| Backend | FastAPI (Python) |
-| OCR | Tesseract 5.x |
-| Image Processing | OpenCV + Pillow |
-| Language Detection | langdetect / fastText |
+|---|---|
+| Frontend | React (Vite, hooks only) |
+| Backend | Django + Django REST Framework |
 | Database | PostgreSQL |
-| Search | Elasticsearch |
-| Containers | Docker + Compose |
+| Auth | DRF Token Authentication |
+| OCR | Custom OCR placeholder service |
 
----
+## Repository Structure
 
-## 🔌 API Endpoints
+```text
+INCLUSIVE-DOC-READER/
+├── backend/
+│   ├── manage.py
+│   ├── requirements.txt
+│   ├── .env.example
+│   ├── project/
+│   │   ├── settings.py
+│   │   ├── urls.py
+│   │   ├── asgi.py
+│   │   └── wsgi.py
+│   ├── accounts/
+│   │   ├── serializers.py
+│   │   ├── views.py
+│   │   └── urls.py
+│   └── documents/
+│       ├── models.py
+│       ├── serializers.py
+│       ├── views.py
+│       ├── urls.py
+│       └── ocr_service.py
+└── frontend/
+    ├── package.json
+    ├── .env.example
+    ├── index.html
+    └── src/
+        ├── App.jsx
+        ├── components/
+        ├── pages/
+        └── services/
+```
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/upload` | Upload scanned PDF/image |
-| GET | `/documents` | List all processed documents |
-| GET | `/documents/{id}` | Get document text & metadata |
-| GET | `/search?q=keyword` | Full-text search |
-| POST | `/documents/{id}/tags` | Add tags to a document |
-| POST | `/auth/register` | Create account |
-| POST | `/auth/login` | Get JWT token |
+## API Endpoints (Starter)
 
----
+All routes are under `/api/`.
 
-## 🧪 Running Tests
+| Method | Endpoint | Purpose |
+|---|---|---|
+| POST | `/api/register/` | Create user account |
+| POST | `/api/login/` | Login and get token |
+| POST | `/api/upload/` | Upload file + run OCR placeholder |
+| GET | `/api/documents/` | List current user's documents |
+| GET | `/api/documents/<id>/` | Get one document |
+| GET | `/api/search/?q=keyword` | Search extracted text |
+
+## Local Setup
+
+### 1) Backend (Django)
 
 ```bash
 cd backend
-pytest tests/ -v
+python -m venv .venv
+# Windows PowerShell
+.venv\Scripts\Activate.ps1
+# macOS/Linux
+# source .venv/bin/activate
+
+pip install -r requirements.txt
 ```
 
----
+Create `backend/.env` from `backend/.env.example` and update DB values.
 
-## 🌿 Branch Strategy
+```bash
+python manage.py makemigrations
+python manage.py migrate
+python manage.py runserver
+```
 
-| Branch | Purpose |
-|--------|---------|
-| `main` | Stable, production-ready |
-| `dev` | Integration branch |
-| `feature/ocr-engine` | OCR + language detection |
-| `feature/frontend-ui` | React UI components |
-| `feature/search` | Elasticsearch integration |
+Backend runs at `http://127.0.0.1:8000`.
 
----
+### 2) Frontend (React)
 
-## 📄 License
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-MIT License — see [LICENSE](LICENSE)
+Frontend runs at `http://localhost:5173`.
+
+If needed, set `VITE_API_BASE_URL` in `frontend/.env`.
+
+## PostgreSQL Notes
+
+Default expected variables:
+
+- `DB_NAME=inclusive_reader_db`
+- `DB_USER=postgres`
+- `DB_PASSWORD=postgres`
+- `DB_HOST=127.0.0.1`
+- `DB_PORT=5432`
+
+Create a matching PostgreSQL database/user before running migrations.
+
+## Next Development Steps
+
+- Add migration files for `Document` model
+- Add form validation and API error messages in React pages
+- Add tests for auth and document APIs
+- Replace OCR placeholder with custom OCR model call
+
+## License
+
+MIT License. See `LICENSE`.
