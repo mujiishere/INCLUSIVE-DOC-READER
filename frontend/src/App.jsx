@@ -3,53 +3,51 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import Navbar from "./components/Navbar";
 import ProtectedRoute from "./components/ProtectedRoute";
+import AdminPage from "./pages/AdminPage";
+import DashboardPage from "./pages/DashboardPage";
 import DocumentListPage from "./pages/DocumentListPage";
 import DocumentViewerPage from "./pages/DocumentViewerPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import UploadPage from "./pages/UploadPage";
+import UsersPage from "./pages/UsersPage";
+
+
+function AppShell() {
+    return (
+        <div className="app-shell">
+            <Navbar />
+            <main className="main-content">
+                <Routes>
+                    <Route path="/dashboard" element={<DashboardPage />} />
+                    <Route path="/upload" element={<UploadPage />} />
+                    <Route path="/search" element={<DocumentListPage />} />
+                    <Route path="/documents" element={<Navigate to="/search" replace />} />
+                    <Route path="/documents/:id" element={<DocumentViewerPage />} />
+                    <Route path="/admin" element={<AdminPage />} />
+                    <Route path="/users" element={<UsersPage />} />
+                    <Route path="*" element={<Navigate to="/dashboard" />} />
+                </Routes>
+            </main>
+        </div>
+    );
+}
 
 
 function App() {
     return (
-        <>
-            <Navbar />
-            <main className="container">
-                <Routes>
-                    <Route path="/register" element={<RegisterPage />} />
-                    <Route path="/login" element={<LoginPage />} />
-
-                    <Route
-                        path="/upload"
-                        element={
-                            <ProtectedRoute>
-                                <UploadPage />
-                            </ProtectedRoute>
-                        }
-                    />
-
-                    <Route
-                        path="/documents"
-                        element={
-                            <ProtectedRoute>
-                                <DocumentListPage />
-                            </ProtectedRoute>
-                        }
-                    />
-
-                    <Route
-                        path="/documents/:id"
-                        element={
-                            <ProtectedRoute>
-                                <DocumentViewerPage />
-                            </ProtectedRoute>
-                        }
-                    />
-
-                    <Route path="*" element={<Navigate to="/documents" />} />
-                </Routes>
-            </main>
-        </>
+        <Routes>
+            <Route path="/register" element={<RegisterPage />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route
+                path="/*"
+                element={
+                    <ProtectedRoute>
+                        <AppShell />
+                    </ProtectedRoute>
+                }
+            />
+        </Routes>
     );
 }
 

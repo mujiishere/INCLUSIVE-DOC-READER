@@ -9,6 +9,36 @@ from .ocr_service import run_ocr
 from .serializers import DocumentSerializer
 
 
+@api_view(["GET"])
+def dashboard_stats(request):
+    """Return basic dashboard metrics and recent documents for current user."""
+    queryset = Document.objects.filter(user=request.user)
+    total_documents = queryset.count()
+    processed_files = queryset.exclude(extracted_text="").count()
+    pending_uploads = total_documents - processed_files
+
+    recent_documents = queryset.order_by("-uploaded_at")[:5]
+    recent_payload = [
+        {
+            "id": document.id,
+            "file_name": document.file.name.split("/")[-1],
+            "uploaded_at": document.uploaded_at,
+            "status": "Completed" if document.extracted_text else "Pending",
+        }
+        for document in recent_documents
+    ]
+
+    return Response(
+        {
+            "total_documents": total_documents,
+            "processed_files": processed_files,
+            "pending_uploads": pending_uploads,
+            "recent_activity": len(recent_payload),
+            "recent_documents": recent_payload,
+        }
+    )
+
+
 @api_view(["POST"])
 def upload_document(request):
     """Upload file, run OCR placeholder, and save extracted text."""

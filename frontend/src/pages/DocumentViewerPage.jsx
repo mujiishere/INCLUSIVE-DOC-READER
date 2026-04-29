@@ -36,7 +36,7 @@ function DocumentViewerPage() {
     }
 
     return (
-        <section className="card">
+        <section className="glass-card">
             <h2>Document #{documentItem.id}</h2>
 
             <a href={documentItem.file} target="_blank" rel="noreferrer">

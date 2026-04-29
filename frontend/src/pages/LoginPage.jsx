@@ -29,26 +29,29 @@ function LoginPage() {
     }
 
     return (
-        <section className="card">
-            <h2>Login</h2>
-            <form onSubmit={handleSubmit}>
-                <input
-                    placeholder="Username"
-                    value={formData.username}
-                    onChange={(event) => setFormData({ ...formData, username: event.target.value })}
-                />
+        <section className="auth-page">
+            <div className="card auth-card">
+                <h2>Welcome Back</h2>
+                <p className="muted-text">Sign in to continue to DocuOrbit.</p>
+                <form onSubmit={handleSubmit}>
+                    <input
+                        placeholder="Username"
+                        value={formData.username}
+                        onChange={(event) => setFormData({ ...formData, username: event.target.value })}
+                    />
 
-                <input
-                    type="password"
-                    placeholder="Password"
-                    value={formData.password}
-                    onChange={(event) => setFormData({ ...formData, password: event.target.value })}
-                />
+                    <input
+                        type="password"
+                        placeholder="Password"
+                        value={formData.password}
+                        onChange={(event) => setFormData({ ...formData, password: event.target.value })}
+                    />
 
-                <button type="submit">Login</button>
-                {errorMessage && <p>{errorMessage}</p>}
-                {isSubmitting && <p>Signing in...</p>}
-            </form>
+                    <button type="submit">Login</button>
+                    {errorMessage && <p>{errorMessage}</p>}
+                    {isSubmitting && <p>Signing in...</p>}
+                </form>
+            </div>
         </section>
     );
 }

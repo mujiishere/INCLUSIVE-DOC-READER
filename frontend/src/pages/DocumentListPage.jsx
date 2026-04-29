@@ -46,21 +46,25 @@ function DocumentListPage() {
     }
 
     return (
-        <>
-            <h2>Your Documents</h2>
+        <section>
+            <header className="page-header">
+                <h2>Search Documents</h2>
+                <p>Find uploaded files by keyword from extracted OCR text.</p>
+            </header>
+
             <SearchBar query={query} onQueryChange={setQuery} onSearch={handleSearch} />
             {errorMessage && <p>{errorMessage}</p>}
             {isLoading && <p>Loading documents...</p>}
             {!isLoading && documents.length === 0 && <p>No documents found.</p>}
 
             {documents.map((doc) => (
-                <article key={doc.id} className="card">
+                <article key={doc.id} className="glass-card">
                     <h3>Document #{doc.id}</h3>
-                    <p>Uploaded: {new Date(doc.uploaded_at).toLocaleString()}</p>
+                    <p className="muted-text">Uploaded: {new Date(doc.uploaded_at).toLocaleString()}</p>
                     <Link to={`/documents/${doc.id}`}>View Details</Link>
                 </article>
             ))}
-        </>
+        </section>
     );
 }
 

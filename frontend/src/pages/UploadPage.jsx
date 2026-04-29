@@ -33,19 +33,25 @@ function UploadPage() {
     }
 
     return (
-        <section className="card">
-            <h2>Upload Document</h2>
-            <form onSubmit={handleSubmit}>
-                <input
-                    type="file"
-                    accept=".pdf,image/*"
-                    onChange={(event) => setSelectedFile(event.target.files[0])}
-                />
-                <button type="submit">Upload</button>
-                {errorMessage && <p>{errorMessage}</p>}
-                {successMessage && <p>{successMessage}</p>}
-                {isSubmitting && <p>Uploading file...</p>}
-            </form>
+        <section>
+            <header className="page-header">
+                <h2>Upload Document</h2>
+                <p>Upload scanned images or PDFs and run OCR extraction.</p>
+            </header>
+
+            <section className="glass-card">
+                <form onSubmit={handleSubmit}>
+                    <input
+                        type="file"
+                        accept=".pdf,image/*"
+                        onChange={(event) => setSelectedFile(event.target.files[0])}
+                    />
+                    <button type="submit">Upload</button>
+                    {errorMessage && <p>{errorMessage}</p>}
+                    {successMessage && <p>{successMessage}</p>}
+                    {isSubmitting && <p>Uploading file...</p>}
+                </form>
+            </section>
         </section>
     );
 }
