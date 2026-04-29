@@ -107,6 +107,60 @@ Frontend runs at `http://localhost:5173`.
 
 If needed, set `VITE_API_BASE_URL` in `frontend/.env`.
 
+## Run Commands (Quick Copy)
+
+Backend:
+
+```bash
+cd backend
+python -m venv .venv
+# Windows PowerShell
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+copy .env.example .env
+python manage.py makemigrations
+python manage.py migrate
+python manage.py createsuperuser
+python manage.py runserver
+```
+
+Frontend:
+
+```bash
+cd frontend
+copy .env.example .env
+npm install
+npm run dev
+```
+
+## API Test Flow (MVP)
+
+1. Register a user from UI (`/register`) or POST `/api/register/`.
+2. Login from UI (`/login`) and verify token is stored in localStorage.
+3. Open `/upload`, select image/PDF, and upload.
+4. Verify file appears in `/documents` list.
+5. Open a document detail page and verify extracted placeholder text appears.
+6. Search with a keyword from extracted text and verify filtered results.
+7. In detail view, type a highlight keyword and verify matches are marked.
+
+## Backend API Smoke Test (cURL)
+
+```bash
+# Register
+curl -X POST http://127.0.0.1:8000/api/register/ \
+  -H "Content-Type: application/json" \
+  -d '{"username":"demo","email":"demo@example.com","password":"demo12345"}'
+
+# Login
+curl -X POST http://127.0.0.1:8000/api/login/ \
+  -H "Content-Type: application/json" \
+  -d '{"username":"demo","password":"demo12345"}'
+
+# List documents (replace TOKEN)
+curl http://127.0.0.1:8000/api/documents/ \
+  -H "Authorization: Token TOKEN"
+```
+
 ## PostgreSQL Notes
 
 Default expected variables:

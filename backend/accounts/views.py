@@ -19,7 +19,7 @@ def register_view(request):
         user = serializer.save()
         token, _ = Token.objects.get_or_create(user=user)
         return Response({"token": token.key}, status=status.HTTP_201_CREATED)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    return Response({"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(["POST"])
@@ -28,6 +28,13 @@ def login_view(request):
     """Validate credentials and return token for React app."""
     username = request.data.get("username")
     password = request.data.get("password")
+
+    if not username or not password:
+        return Response(
+            {"error": "Username and password are required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
     user = authenticate(username=username, password=password)
 
     if not user:

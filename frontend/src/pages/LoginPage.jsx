@@ -2,18 +2,30 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { getApiErrorMessage } from "../services/api";
 import { loginUser, saveToken } from "../services/authService";
 
 
 function LoginPage() {
     const navigate = useNavigate();
     const [formData, setFormData] = useState({ username: "", password: "" });
+    const [errorMessage, setErrorMessage] = useState("");
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     async function handleSubmit(event) {
         event.preventDefault();
-        const data = await loginUser(formData);
-        saveToken(data.token);
-        navigate("/documents");
+        setErrorMessage("");
+        setIsSubmitting(true);
+
+        try {
+            const data = await loginUser(formData);
+            saveToken(data.token);
+            navigate("/documents");
+        } catch (error) {
+            setErrorMessage(getApiErrorMessage(error));
+        } finally {
+            setIsSubmitting(false);
+        }
     }
 
     return (
@@ -34,6 +46,8 @@ function LoginPage() {
                 />
 
                 <button type="submit">Login</button>
+                {errorMessage && <p>{errorMessage}</p>}
+                {isSubmitting && <p>Signing in...</p>}
             </form>
         </section>
     );

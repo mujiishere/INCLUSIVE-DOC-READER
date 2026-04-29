@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
 import HighlightedText from "../components/HighlightedText";
+import { getApiErrorMessage } from "../services/api";
 import { getDocumentById } from "../services/documentService";
 
 
@@ -10,14 +11,24 @@ function DocumentViewerPage() {
     const { id } = useParams();
     const [documentItem, setDocumentItem] = useState(null);
     const [keyword, setKeyword] = useState("");
+    const [errorMessage, setErrorMessage] = useState("");
 
     useEffect(() => {
         loadDocument();
     }, [id]);
 
     async function loadDocument() {
-        const data = await getDocumentById(id);
-        setDocumentItem(data);
+        setErrorMessage("");
+        try {
+            const data = await getDocumentById(id);
+            setDocumentItem(data);
+        } catch (error) {
+            setErrorMessage(getApiErrorMessage(error));
+        }
+    }
+
+    if (errorMessage) {
+        return <p>{errorMessage}</p>;
     }
 
     if (!documentItem) {

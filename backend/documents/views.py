@@ -16,9 +16,15 @@ def upload_document(request):
     if not uploaded_file:
         return Response({"error": "File is required."}, status=status.HTTP_400_BAD_REQUEST)
 
-    document = Document.objects.create(user=request.user, file=uploaded_file)
-    document.extracted_text = run_ocr(document.file.path)
-    document.save()
+    try:
+        document = Document.objects.create(user=request.user, file=uploaded_file)
+        document.extracted_text = run_ocr(document.file.path)
+        document.save()
+    except Exception:
+        return Response(
+            {"error": "Upload failed. Please try again."},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
     return Response(DocumentSerializer(document).data, status=status.HTTP_201_CREATED)
 
@@ -44,7 +50,7 @@ class DocumentDetailView(generics.RetrieveAPIView):
 @api_view(["GET"])
 def search_documents(request):
     """Search documents by keyword in extracted_text."""
-    query = request.GET.get("q", "")
+    query = request.GET.get("q", "").strip()
     queryset = Document.objects.filter(user=request.user)
 
     if query:
