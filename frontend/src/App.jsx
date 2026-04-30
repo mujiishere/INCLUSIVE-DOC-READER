@@ -24,8 +24,22 @@ function AppShell() {
                     <Route path="/search" element={<DocumentListPage />} />
                     <Route path="/documents" element={<Navigate to="/search" replace />} />
                     <Route path="/documents/:id" element={<DocumentViewerPage />} />
-                    <Route path="/admin" element={<AdminPage />} />
-                    <Route path="/users" element={<UsersPage />} />
+                    <Route
+                        path="/admin"
+                        element={
+                            <ProtectedRoute requireAdmin>
+                                <AdminPage />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/users"
+                        element={
+                            <ProtectedRoute requireAdmin>
+                                <UsersPage />
+                            </ProtectedRoute>
+                        }
+                    />
                     <Route path="*" element={<Navigate to="/dashboard" />} />
                 </Routes>
             </main>

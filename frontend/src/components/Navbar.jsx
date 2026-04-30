@@ -1,13 +1,33 @@
 // Left sidebar navigation used across authenticated screens.
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
-import { clearToken, getToken } from "../services/authService";
+import { clearToken, getCurrentUser, getToken } from "../services/authService";
+import { useEffect, useState } from "react";
 
 
 function Navbar() {
     const navigate = useNavigate();
     const location = useLocation();
     const isLoggedIn = Boolean(getToken());
+    const [isAdmin, setIsAdmin] = useState(false);
+
+    useEffect(() => {
+        async function loadUserRole() {
+            if (!isLoggedIn) {
+                setIsAdmin(false);
+                return;
+            }
+
+            try {
+                const user = await getCurrentUser();
+                setIsAdmin(Boolean(user.is_staff || user.is_superuser));
+            } catch {
+                setIsAdmin(false);
+            }
+        }
+
+        loadUserRole();
+    }, [isLoggedIn]);
 
     function handleLogout() {
         clearToken();
@@ -18,8 +38,7 @@ function Navbar() {
         { to: "/dashboard", label: "Dashboard" },
         { to: "/upload", label: "Upload" },
         { to: "/search", label: "Search" },
-        { to: "/admin", label: "Admin" },
-        { to: "/users", label: "Users" },
+        ...(isAdmin ? [{ to: "/admin", label: "Admin" }, { to: "/users", label: "Users" }] : []),
     ];
 
     function isActivePath(path) {

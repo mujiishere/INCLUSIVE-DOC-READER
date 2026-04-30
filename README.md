@@ -69,6 +69,10 @@ All routes are under `/api/`.
 | GET | `/api/documents/` | List current user's documents |
 | GET | `/api/documents/<id>/` | Get one document |
 | GET | `/api/search/?q=keyword` | Search extracted text |
+| GET | `/api/dashboard/` | Dashboard stats + recent documents |
+| GET | `/api/me/` | Current logged-in user profile |
+| GET | `/api/admin/summary/` | Admin summary metrics (staff only) |
+| GET | `/api/admin/users/` | Admin user list (staff only) |
 
 ## Local Setup
 
@@ -123,6 +127,8 @@ python manage.py migrate
 python manage.py createsuperuser
 python manage.py runserver
 ```
+
+To use admin pages from frontend (`/admin`, `/users`), use a staff/superuser account.
 
 Frontend:
 

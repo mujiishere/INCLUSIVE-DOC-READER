@@ -83,3 +83,18 @@ def admin_users_view(request):
     ]
 
     return Response(payload)
+
+
+@api_view(["GET"])
+def current_user_view(request):
+    """Return basic profile details for the logged-in user."""
+    user = request.user
+    return Response(
+        {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "is_staff": user.is_staff,
+            "is_superuser": user.is_superuser,
+        }
+    )
