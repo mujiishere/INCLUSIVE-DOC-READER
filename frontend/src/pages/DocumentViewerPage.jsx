@@ -560,6 +560,7 @@ function DocumentViewerPage() {
                                             className="btn-icon"
                                             onClick={(e) => {
                                                 e.stopPropagation();
+                                                setActiveRegionId(region.id);
                                                 const latest = regionAnnotations[0] || null;
                                                 setAnnotationRegionId((prev) => prev === region.id ? null : region.id);
                                                 if (latest) {
@@ -615,6 +616,26 @@ function DocumentViewerPage() {
                                             <span key={t.id} className="tag-pill" style={{ fontSize: "0.72rem" }}>#{t.name}</span>
                                         ))}
                                     </div>
+                                )}
+
+                                {/* Quick annotation button when collapsed */}
+                                {!isActive && (
+                                    <button
+                                        type="button"
+                                        className="btn-sm"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setActiveRegionId(region.id);
+                                            setAnnotationRegionId(region.id);
+                                            setEditingAnnotationId(null);
+                                            setAnnotationCategory("Note");
+                                            setAnnotationNote("");
+                                            setAnnotationCustomTag("");
+                                        }}
+                                        style={{ marginTop: 8, width: "auto", padding: "4px 8px", fontSize: "0.75rem" }}
+                                    >
+                                        + Annotate
+                                    </button>
                                 )}
 
                                 {/* Expanded controls (when active) */}

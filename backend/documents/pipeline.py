@@ -16,7 +16,10 @@ On any unhandled exception → document.status = failed with error_message.
 
 import logging
 import os
+import shutil
 import threading
+import time
+import tempfile
 from io import BytesIO
 from pathlib import Path
 from typing import List
@@ -68,7 +71,8 @@ def _run_pipeline(document_id: int) -> None:
         document.save(update_fields=["status", "error_message", "updated_at"])
 
         file_path = document.file.path
-        pages_data = file_to_pages(file_path)
+        local_file_path = _prepare_local_processing_copy(file_path)
+        pages_data = file_to_pages(local_file_path)
         document.page_count = len(pages_data)
         document.save(update_fields=["page_count", "updated_at"])
 
@@ -155,6 +159,45 @@ def _run_pipeline(document_id: int) -> None:
             document.save(update_fields=["status", "error_message", "updated_at"])
         except Exception:
             pass
+    finally:
+        # Clean temporary local processing copy if created.
+        try:
+            if "local_file_path" in locals() and local_file_path and local_file_path != document.file.path:
+                if os.path.isfile(local_file_path):
+                    os.remove(local_file_path)
+        except Exception:
+            pass
+
+
+def _prepare_local_processing_copy(file_path: str) -> str:
+    """Create a local temp copy for OCR processing with retry safety checks.
+
+    This avoids transient file locks/sync issues from cloud-backed folders.
+    """
+    source = Path(file_path)
+
+    # Wait briefly for file to become available on disk.
+    last_error = None
+    for _ in range(10):
+        try:
+            if source.exists() and source.stat().st_size > 0:
+                with open(source, "rb"):
+                    pass
+                break
+        except Exception as exc:  # noqa: BLE001
+            last_error = exc
+        time.sleep(0.3)
+    else:
+        if last_error:
+            raise RuntimeError(f"Uploaded file is not readable yet: {source} ({last_error})")
+        raise RuntimeError(f"Uploaded file not found or empty: {source}")
+
+    suffix = source.suffix or ".bin"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        temp_path = Path(tmp.name)
+
+    shutil.copyfile(source, temp_path)
+    return str(temp_path)
 
 
 # ---------------------------------------------------------------------------

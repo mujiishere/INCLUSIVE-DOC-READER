@@ -36,7 +36,28 @@ def upload_document(request):
     if not uploaded_file:
         return Response({"error": "File is required."}, status=status.HTTP_400_BAD_REQUEST)
 
+    allowed_extensions = {".pdf", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp"}
     original_name = uploaded_file.name
+    extension = os.path.splitext(original_name)[1].lower()
+    if extension not in allowed_extensions:
+        return Response(
+            {"error": "Unsupported file type. Upload PDF or image formats only."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Guardrail: many users rename text files as .pdf by mistake.
+    if extension == ".pdf":
+        header = uploaded_file.read(5)
+        uploaded_file.seek(0)
+        if header != b"%PDF-":
+            return Response(
+                {
+                    "error": "The uploaded .pdf file is not a valid PDF. "
+                    "Please export/download a real PDF and try again."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
     title = request.data.get("title", "") or os.path.splitext(original_name)[0]
 
     doc = Document.objects.create(
@@ -377,20 +398,29 @@ def search_documents(request):
         )
         return Response({"results": serializer.data, "total": docs_qs.count()})
 
-    # Filter documents that have matching regions
+    # Filter documents that have matching regions and/or matching document name.
     region_filter = Q()
     if query:
         region_filter &= Q(corrected_text__icontains=query) | Q(raw_text__icontains=query)
     if lang:
         region_filter &= Q(language=lang)
 
-    matching_doc_ids = (
+    region_doc_ids = set(
         TextRegion.objects.filter(region_filter, page__document__user=request.user)
         .values_list("page__document_id", flat=True)
         .distinct()
     )
 
-    docs_qs = docs_qs.filter(pk__in=matching_doc_ids)
+    title_doc_ids = set()
+    if query:
+        title_doc_ids = set(
+            docs_qs.filter(
+                Q(title__icontains=query) | Q(original_filename__icontains=query)
+            ).values_list("id", flat=True)
+        )
+
+    matched_ids = region_doc_ids | title_doc_ids
+    docs_qs = docs_qs.filter(pk__in=matched_ids)
 
     # Build response with snippet per document
     results = []
@@ -414,6 +444,14 @@ def search_documents(request):
             start = max(0, idx - 60)
             end = min(len(text), idx + len(query) + 60)
             snippet = ("…" if start > 0 else "") + text[start:end] + ("…" if end < len(text) else "")
+        elif query:
+            title_text = doc.title or doc.original_filename or ""
+            idx = title_text.lower().find(query.lower())
+            if idx >= 0:
+                start = max(0, idx - 30)
+                end = min(len(title_text), idx + len(query) + 30)
+                excerpt = title_text[start:end]
+                snippet = f"Matched in filename/title: {excerpt}"
 
         doc_data = DocumentSerializer(doc, context={"request": request}).data
         doc_data["snippet"] = snippet
