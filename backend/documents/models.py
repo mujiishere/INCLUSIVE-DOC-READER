@@ -12,10 +12,10 @@ from django.db import models
 
 
 # ---------------------------------------------------------------------------
-# Tag  (user-scoped label reusable across documents and regions)
+# DocumentTag  (user-scoped label reusable across documents and regions)
 # ---------------------------------------------------------------------------
 
-class Tag(models.Model):
+class DocumentTag(models.Model):
     """A simple text label owned by a user."""
 
     user = models.ForeignKey(
@@ -64,7 +64,7 @@ class Document(models.Model):
     # Comma-separated ISO language codes detected across all pages
     languages_detected = models.TextField(blank=True, default="")
     error_message = models.TextField(blank=True, default="")
-    tags = models.ManyToManyField(Tag, blank=True, related_name="documents")
+    tags = models.ManyToManyField(DocumentTag, blank=True, related_name="documents")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -139,9 +139,9 @@ class TextRegion(models.Model):
     reading_order = models.PositiveIntegerField(default=0)
     raw_text = models.TextField(blank=True, default="")
     corrected_text = models.TextField(blank=True, default="")
-    # Optional user annotation
+    # Legacy inline annotation field kept for backward compatibility.
     annotation = models.TextField(blank=True, default="")
-    tags = models.ManyToManyField(Tag, blank=True, related_name="regions")
+    tags = models.ManyToManyField(DocumentTag, blank=True, related_name="regions")
 
     class Meta:
         ordering = ["reading_order"]
@@ -152,3 +152,39 @@ class TextRegion(models.Model):
     @property
     def bbox(self):
         return [self.bbox_x, self.bbox_y, self.bbox_w, self.bbox_h]
+
+
+# ---------------------------------------------------------------------------
+# RegionAnnotation  (structured annotation linked to one text region)
+# ---------------------------------------------------------------------------
+
+class RegionAnnotation(models.Model):
+    """A structured user annotation for one extracted text region."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="region_annotations",
+    )
+    region = models.ForeignKey(
+        TextRegion,
+        on_delete=models.CASCADE,
+        related_name="annotations",
+    )
+    category = models.CharField(max_length=80)
+    note = models.TextField(blank=True, default="")
+    custom_tag = models.ForeignKey(
+        DocumentTag,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="annotations",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return f"Annotation {self.id} on Region {self.region_id}"

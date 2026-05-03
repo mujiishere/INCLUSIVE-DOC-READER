@@ -13,13 +13,14 @@ from rest_framework import generics, status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from .models import Document, DocumentPage, Tag, TextRegion
+from .models import Document, DocumentPage, DocumentTag, RegionAnnotation, TextRegion
 from .pipeline import start_processing
 from .serializers import (
     DocumentDetailSerializer,
     DocumentPageSerializer,
+    DocumentTagSerializer,
     DocumentSerializer,
-    TagSerializer,
+    RegionAnnotationSerializer,
     TextRegionSerializer,
 )
 
@@ -64,7 +65,22 @@ class DocumentListView(generics.ListAPIView):
     serializer_class = DocumentSerializer
 
     def get_queryset(self):
-        return Document.objects.filter(user=self.request.user).prefetch_related("tags")
+        queryset = Document.objects.filter(user=self.request.user).prefetch_related("tags")
+
+        tag_name = self.request.GET.get("tag", "").strip()
+        tag_ids = self.request.GET.get("tag_ids", "").strip()
+
+        if tag_name:
+            queryset = queryset.filter(tags__name__iexact=tag_name, tags__user=self.request.user)
+
+        if tag_ids:
+            try:
+                parsed_ids = [int(value) for value in tag_ids.split(",") if value.strip()]
+                queryset = queryset.filter(tags__id__in=parsed_ids, tags__user=self.request.user)
+            except ValueError:
+                return queryset.none()
+
+        return queryset.distinct()
 
     def get_serializer_context(self):
         ctx = super().get_serializer_context()
@@ -169,16 +185,16 @@ def document_tags(request, pk):
         return Response({"error": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
     if request.method == "GET":
-        return Response(TagSerializer(doc.tags.all(), many=True).data)
+        return Response(DocumentTagSerializer(doc.tags.all(), many=True).data)
 
     # POST — add tag
     name = request.data.get("name", "").strip()
     if not name:
         return Response({"error": "Tag name required."}, status=status.HTTP_400_BAD_REQUEST)
 
-    tag, _ = Tag.objects.get_or_create(user=request.user, name=name)
+    tag, _ = DocumentTag.objects.get_or_create(user=request.user, name=name)
     doc.tags.add(tag)
-    return Response(TagSerializer(tag).data, status=status.HTTP_201_CREATED)
+    return Response(DocumentTagSerializer(tag).data, status=status.HTTP_201_CREATED)
 
 
 @api_view(["DELETE"])
@@ -186,8 +202,8 @@ def document_tag_remove(request, pk, tag_id):
     """Remove a tag from a document (does not delete the tag)."""
     try:
         doc = Document.objects.get(pk=pk, user=request.user)
-        tag = Tag.objects.get(pk=tag_id, user=request.user)
-    except (Document.DoesNotExist, Tag.DoesNotExist):
+        tag = DocumentTag.objects.get(pk=tag_id, user=request.user)
+    except (Document.DoesNotExist, DocumentTag.DoesNotExist):
         return Response({"error": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
     doc.tags.remove(tag)
@@ -198,18 +214,119 @@ def document_tag_remove(request, pk, tag_id):
 # Region annotation + tagging
 # ---------------------------------------------------------------------------
 
-@api_view(["PATCH"])
-def region_annotate(request, region_id):
-    """Set or update the annotation text on a text region."""
+@api_view(["POST"])
+def create_region_annotation(request, region_id):
+    """Create a structured annotation for one text region."""
     try:
         region = TextRegion.objects.get(pk=region_id, page__document__user=request.user)
     except TextRegion.DoesNotExist:
         return Response({"error": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-    annotation = request.data.get("annotation", "")
-    region.annotation = annotation
+    category = request.data.get("category", "").strip()
+    note = request.data.get("note", "").strip()
+    custom_tag_name = request.data.get("custom_tag_name", "").strip()
+    custom_tag_id = request.data.get("custom_tag_id")
+
+    if not category:
+        return Response({"error": "Category is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+    custom_tag = None
+    if custom_tag_name:
+        custom_tag, _ = DocumentTag.objects.get_or_create(user=request.user, name=custom_tag_name)
+    elif custom_tag_id:
+        try:
+            custom_tag = DocumentTag.objects.get(id=custom_tag_id, user=request.user)
+        except DocumentTag.DoesNotExist:
+            return Response({"error": "Custom tag not found."}, status=status.HTTP_400_BAD_REQUEST)
+
+    annotation = RegionAnnotation.objects.create(
+        user=request.user,
+        region=region,
+        category=category,
+        note=note,
+        custom_tag=custom_tag,
+    )
+
+    # Keep legacy text field in sync for old clients.
+    region.annotation = note
     region.save(update_fields=["annotation"])
-    return Response(TextRegionSerializer(region).data)
+
+    serializer = RegionAnnotationSerializer(annotation)
+    return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["PATCH", "DELETE"])
+def region_annotation_detail(request, annotation_id):
+    """Update or delete one annotation owned by the current user."""
+    try:
+        annotation = RegionAnnotation.objects.get(
+            id=annotation_id,
+            user=request.user,
+            region__page__document__user=request.user,
+        )
+    except RegionAnnotation.DoesNotExist:
+        return Response({"error": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == "DELETE":
+        region = annotation.region
+        annotation.delete()
+        latest = region.annotations.order_by("-updated_at").first()
+        region.annotation = latest.note if latest else ""
+        region.save(update_fields=["annotation"])
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    category = request.data.get("category")
+    note = request.data.get("note")
+    custom_tag_name = request.data.get("custom_tag_name", "").strip()
+    custom_tag_id = request.data.get("custom_tag_id")
+
+    if category is not None:
+        category = category.strip()
+        if not category:
+            return Response({"error": "Category cannot be empty."}, status=status.HTTP_400_BAD_REQUEST)
+        annotation.category = category
+
+    if note is not None:
+        annotation.note = str(note)
+
+    if custom_tag_name:
+        custom_tag, _ = DocumentTag.objects.get_or_create(user=request.user, name=custom_tag_name)
+        annotation.custom_tag = custom_tag
+    elif custom_tag_id is not None:
+        if custom_tag_id == "" or custom_tag_id is None:
+            annotation.custom_tag = None
+        else:
+            try:
+                annotation.custom_tag = DocumentTag.objects.get(id=custom_tag_id, user=request.user)
+            except DocumentTag.DoesNotExist:
+                return Response({"error": "Custom tag not found."}, status=status.HTTP_400_BAD_REQUEST)
+
+    annotation.save()
+
+    region = annotation.region
+    latest = region.annotations.order_by("-updated_at").first()
+    region.annotation = latest.note if latest else ""
+    region.save(update_fields=["annotation"])
+
+    serializer = RegionAnnotationSerializer(annotation)
+    return Response(serializer.data)
+
+
+@api_view(["GET"])
+def document_annotations(request, pk):
+    """List all structured annotations for one document."""
+    try:
+        doc = Document.objects.get(pk=pk, user=request.user)
+    except Document.DoesNotExist:
+        return Response({"error": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    annotations = RegionAnnotation.objects.filter(
+        region__page__document=doc,
+        user=request.user,
+    ).select_related("custom_tag", "region", "region__page")
+
+    serializer = RegionAnnotationSerializer(annotations, many=True)
+    return Response(serializer.data)
 
 
 @api_view(["POST"])
@@ -224,9 +341,9 @@ def region_add_tag(request, region_id):
     if not name:
         return Response({"error": "Tag name required."}, status=status.HTTP_400_BAD_REQUEST)
 
-    tag, _ = Tag.objects.get_or_create(user=request.user, name=name)
+    tag, _ = DocumentTag.objects.get_or_create(user=request.user, name=name)
     region.tags.add(tag)
-    return Response(TagSerializer(tag).data, status=status.HTTP_201_CREATED)
+    return Response(DocumentTagSerializer(tag).data, status=status.HTTP_201_CREATED)
 
 
 # ---------------------------------------------------------------------------
@@ -244,9 +361,13 @@ def search_documents(request):
     """
     query = request.GET.get("q", "").strip()
     lang = request.GET.get("lang", "").strip()
+    tag = request.GET.get("tag", "").strip()
 
     # Start from user's documents
     docs_qs = Document.objects.filter(user=request.user)
+
+    if tag:
+        docs_qs = docs_qs.filter(tags__name__iexact=tag, tags__user=request.user).distinct()
 
     if not query and not lang:
         serializer = DocumentSerializer(

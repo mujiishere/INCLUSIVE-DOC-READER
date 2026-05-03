@@ -28,6 +28,19 @@ export async function getDocuments() {
     return response.data;
 }
 
+export async function getDocumentsWithFilters({ tag = "", tagIds = "" } = {}) {
+    const params = {};
+    if (tag) {
+        params.tag = tag;
+    }
+    if (tagIds) {
+        params.tag_ids = tagIds;
+    }
+
+    const response = await api.get("/documents/", { params });
+    return response.data;
+}
+
 export async function getDocumentById(id) {
     const response = await api.get(`/documents/${id}/`);
     return response.data;
@@ -79,15 +92,41 @@ export async function addRegionTag(regionId, name) {
 // ── Annotation ────────────────────────────────────────────────────────────
 
 export async function annotateRegion(regionId, annotation) {
-    const response = await api.patch(`/regions/${regionId}/annotate/`, { annotation });
+    const response = await api.post(`/regions/${regionId}/annotations/`, {
+        category: "Note",
+        note: annotation,
+    });
+    return response.data;
+}
+
+
+export async function createRegionAnnotation(regionId, payload) {
+    const response = await api.post(`/regions/${regionId}/annotations/`, payload);
+    return response.data;
+}
+
+
+export async function updateRegionAnnotation(annotationId, payload) {
+    const response = await api.patch(`/annotations/${annotationId}/`, payload);
+    return response.data;
+}
+
+
+export async function deleteRegionAnnotation(annotationId) {
+    await api.delete(`/annotations/${annotationId}/`);
+}
+
+
+export async function getDocumentAnnotations(docId) {
+    const response = await api.get(`/documents/${docId}/annotations/`);
     return response.data;
 }
 
 
 // ── Search ────────────────────────────────────────────────────────────────
 
-export async function searchDocuments(query = "", lang = "") {
-    const response = await api.get("/search/", { params: { q: query, lang } });
+export async function searchDocuments(query = "", lang = "", tag = "") {
+    const response = await api.get("/search/", { params: { q: query, lang, tag } });
     return response.data;
 }
 

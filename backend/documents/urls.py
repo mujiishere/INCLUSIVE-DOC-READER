@@ -5,7 +5,9 @@ from django.urls import path
 from .views import (
     DocumentDetailView,
     DocumentListView,
+    create_region_annotation,
     dashboard_stats,
+    document_annotations,
     document_page_detail,
     document_pages,
     document_status,
@@ -13,7 +15,7 @@ from .views import (
     document_tags,
     export_document,
     region_add_tag,
-    region_annotate,
+    region_annotation_detail,
     search_documents,
     upload_document,
 )
@@ -37,10 +39,12 @@ urlpatterns = [
     # Tags on document
     path("documents/<int:pk>/tags/", document_tags, name="document-tags"),
     path("documents/<int:pk>/tags/<int:tag_id>/", document_tag_remove, name="document-tag-remove"),
+    path("documents/<int:pk>/annotations/", document_annotations, name="document-annotations"),
 
     # Regions
-    path("regions/<int:region_id>/annotate/", region_annotate, name="region-annotate"),
+    path("regions/<int:region_id>/annotations/", create_region_annotation, name="region-annotations-create"),
     path("regions/<int:region_id>/tags/", region_add_tag, name="region-add-tag"),
+    path("annotations/<int:annotation_id>/", region_annotation_detail, name="region-annotation-detail"),
 
     # Search
     path("search/", search_documents, name="document-search"),

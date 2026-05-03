@@ -2,25 +2,67 @@
 
 from rest_framework import serializers
 
-from .models import Document, DocumentPage, Tag, TextRegion
+from .models import Document, DocumentPage, DocumentTag, RegionAnnotation, TextRegion
 
 
-class TagSerializer(serializers.ModelSerializer):
+class DocumentTagSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Tag
+        model = DocumentTag
         fields = ["id", "name"]
 
 
+class RegionAnnotationSerializer(serializers.ModelSerializer):
+    custom_tag = DocumentTagSerializer(read_only=True)
+    custom_tag_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
+    region_page_number = serializers.IntegerField(source="region.page.page_number", read_only=True)
+    region_reading_order = serializers.IntegerField(source="region.reading_order", read_only=True)
+
+    class Meta:
+        model = RegionAnnotation
+        fields = [
+            "id",
+            "region",
+            "category",
+            "note",
+            "custom_tag",
+            "custom_tag_id",
+            "region_page_number",
+            "region_reading_order",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at", "region", "custom_tag"]
+
+    def validate_custom_tag_id(self, value):
+        if value is None:
+            return value
+        request = self.context.get("request")
+        if not request:
+            raise serializers.ValidationError("Request context missing.")
+        exists = DocumentTag.objects.filter(id=value, user=request.user).exists()
+        if not exists:
+            raise serializers.ValidationError("Tag not found.")
+        return value
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["custom_tag"] = (
+            DocumentTagSerializer(instance.custom_tag).data if instance.custom_tag else None
+        )
+        return data
+
+
 class TextRegionSerializer(serializers.ModelSerializer):
-    tags = TagSerializer(many=True, read_only=True)
+    tags = DocumentTagSerializer(many=True, read_only=True)
     bbox = serializers.SerializerMethodField()
+    annotations = RegionAnnotationSerializer(many=True, read_only=True)
 
     class Meta:
         model = TextRegion
         fields = [
             "id", "bbox", "bbox_x", "bbox_y", "bbox_w", "bbox_h",
             "language", "confidence", "reading_order",
-            "raw_text", "corrected_text", "annotation", "tags",
+            "raw_text", "corrected_text", "annotation", "tags", "annotations",
         ]
         read_only_fields = ["id", "bbox"]
 
@@ -60,7 +102,7 @@ class DocumentPageListSerializer(serializers.ModelSerializer):
 
 
 class DocumentSerializer(serializers.ModelSerializer):
-    tags = TagSerializer(many=True, read_only=True)
+    tags = DocumentTagSerializer(many=True, read_only=True)
     languages = serializers.SerializerMethodField()
     page_count = serializers.IntegerField(read_only=True)
     file_url = serializers.SerializerMethodField()
@@ -91,6 +133,13 @@ class DocumentSerializer(serializers.ModelSerializer):
 class DocumentDetailSerializer(DocumentSerializer):
     """Document serializer that includes all pages + regions."""
     pages = DocumentPageListSerializer(many=True, read_only=True)
+    annotations = serializers.SerializerMethodField()
 
     class Meta(DocumentSerializer.Meta):
-        fields = DocumentSerializer.Meta.fields + ["pages"]
+        fields = DocumentSerializer.Meta.fields + ["pages", "annotations"]
+
+    def get_annotations(self, obj):
+        annotations = RegionAnnotation.objects.filter(
+            region__page__document=obj
+        ).select_related("custom_tag", "region")
+        return RegionAnnotationSerializer(annotations, many=True, context=self.context).data

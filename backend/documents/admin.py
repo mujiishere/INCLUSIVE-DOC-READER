@@ -2,7 +2,7 @@
 
 from django.contrib import admin
 
-from .models import Document, DocumentPage, Tag, TextRegion
+from .models import Document, DocumentPage, DocumentTag, RegionAnnotation, TextRegion
 
 
 class DocumentPageInline(admin.TabularInline):
@@ -40,7 +40,14 @@ class TextRegionAdmin(admin.ModelAdmin):
     search_fields = ["raw_text", "corrected_text"]
 
 
-@admin.register(Tag)
-class TagAdmin(admin.ModelAdmin):
+@admin.register(DocumentTag)
+class DocumentTagAdmin(admin.ModelAdmin):
     list_display = ["id", "name", "user"]
     search_fields = ["name"]
+
+
+@admin.register(RegionAnnotation)
+class RegionAnnotationAdmin(admin.ModelAdmin):
+    list_display = ["id", "region", "category", "user", "updated_at"]
+    list_filter = ["category", "user"]
+    search_fields = ["category", "note"]

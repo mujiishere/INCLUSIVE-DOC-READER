@@ -8,6 +8,7 @@ import {
     deleteDocument,
     getDocumentStatus,
     getDocuments,
+    getDocumentsWithFilters,
     searchDocuments,
 } from "../services/documentService";
 
@@ -29,6 +30,7 @@ function DocumentListPage() {
     const [documents, setDocuments] = useState([]);
     const [query, setQuery] = useState("");
     const [langFilter, setLangFilter] = useState("");
+    const [tagFilter, setTagFilter] = useState("");
     const [snippets, setSnippets] = useState({});
     const [errorMessage, setErrorMessage] = useState("");
     const [isLoading, setIsLoading] = useState(false);
@@ -67,7 +69,9 @@ function DocumentListPage() {
         setIsLoading(true);
         setErrorMessage("");
         try {
-            const data = await getDocuments();
+            const data = tagFilter
+                ? await getDocumentsWithFilters({ tag: tagFilter })
+                : await getDocuments();
             setDocuments(Array.isArray(data) ? data : data.results || []);
         } catch (err) {
             setErrorMessage(getApiErrorMessage(err));
@@ -80,7 +84,7 @@ function DocumentListPage() {
         setIsLoading(true);
         setErrorMessage("");
         try {
-            const data = await searchDocuments(query, langFilter);
+            const data = await searchDocuments(query, langFilter, tagFilter);
             const results = data.results || [];
             setDocuments(results);
             const sm = {};
@@ -136,6 +140,13 @@ function DocumentListPage() {
                         <option key={o.value} value={o.value}>{o.label}</option>
                     ))}
                 </select>
+                <input
+                    type="text"
+                    placeholder="Filter tag (e.g. Important)"
+                    value={tagFilter}
+                    onChange={(e) => setTagFilter(e.target.value)}
+                    style={{ width: 220, margin: 0 }}
+                />
                 <button onClick={handleSearch} className="btn-search" style={{ margin: 0, width: "auto", padding: "10px 20px" }}>
                     Search
                 </button>

@@ -7,12 +7,15 @@ import { getApiErrorMessage } from "../services/api";
 import {
     addDocumentTag,
     addRegionTag,
-    annotateRegion,
+    createRegionAnnotation,
+    deleteRegionAnnotation,
     exportDocument,
+    getDocumentAnnotations,
     getDocumentById,
     getDocumentStatus,
     getPageDetail,
     removeDocumentTag,
+    updateRegionAnnotation,
 } from "../services/documentService";
 
 
@@ -49,13 +52,16 @@ function DocumentViewerPage() {
 
     const [newDocTag, setNewDocTag] = useState("");
     const [newRegionTag, setNewRegionTag] = useState("");
-    const [annotation, setAnnotation] = useState("");
+    const [annotationCategory, setAnnotationCategory] = useState("Note");
+    const [annotationNote, setAnnotationNote] = useState("");
+    const [annotationCustomTag, setAnnotationCustomTag] = useState("");
     const [annotationRegionId, setAnnotationRegionId] = useState(null);
+    const [editingAnnotationId, setEditingAnnotationId] = useState(null);
+    const [documentAnnotations, setDocumentAnnotations] = useState([]);
 
     const [errorMessage, setErrorMessage] = useState("");
     const [actionMsg, setActionMsg] = useState("");
     const imgRef = useRef(null);
-    const svgRef = useRef(null);
     const pollRef = useRef(null);
     const regionRefs = useRef({});
 
@@ -69,6 +75,7 @@ function DocumentViewerPage() {
         try {
             const data = await getDocumentById(id);
             setDocument(data);
+            setDocumentAnnotations(data.annotations || []);
             if (data.page_count > 0) {
                 loadPage(id, 1);
             }
@@ -103,6 +110,8 @@ function DocumentViewerPage() {
         try {
             const data = await getPageDetail(docId, pageNum);
             setPageData(data);
+            const annotations = await getDocumentAnnotations(docId);
+            setDocumentAnnotations(annotations);
         } catch (err) {
             setErrorMessage(getApiErrorMessage(err));
         } finally {
@@ -185,10 +194,44 @@ function DocumentViewerPage() {
         e.preventDefault();
         if (!annotationRegionId) return;
         try {
-            await annotateRegion(annotationRegionId, annotation);
+            const payload = {
+                category: annotationCategory,
+                note: annotationNote,
+            };
+            if (annotationCustomTag.trim()) {
+                payload.custom_tag_name = annotationCustomTag.trim();
+            }
+
+            if (editingAnnotationId) {
+                await updateRegionAnnotation(editingAnnotationId, payload);
+            } else {
+                await createRegionAnnotation(annotationRegionId, payload);
+            }
             flash("Annotation saved.");
+            setEditingAnnotationId(null);
+            setAnnotationCategory("Note");
+            setAnnotationNote("");
+            setAnnotationCustomTag("");
+            setAnnotationRegionId(null);
             loadPage(id, currentPage);
         } catch (err) { setErrorMessage(getApiErrorMessage(err)); }
+    }
+
+    async function handleDeleteAnnotation(annotationId) {
+        try {
+            await deleteRegionAnnotation(annotationId);
+            flash("Annotation deleted.");
+            if (editingAnnotationId === annotationId) {
+                setEditingAnnotationId(null);
+                setAnnotationCategory("Note");
+                setAnnotationNote("");
+                setAnnotationCustomTag("");
+                setAnnotationRegionId(null);
+            }
+            loadPage(id, currentPage);
+        } catch (err) {
+            setErrorMessage(getApiErrorMessage(err));
+        }
     }
 
     // ── Export ────────────────────────────────────────────────────────────
@@ -245,6 +288,14 @@ function DocumentViewerPage() {
             return text.toLowerCase().includes(keyword.toLowerCase());
         })
         : regions;
+
+    const currentPageAnnotations = documentAnnotations.filter(
+        (annotation) => annotation.region_page_number === currentPage
+    );
+
+    function getRegionAnnotations(regionId) {
+        return documentAnnotations.filter((annotation) => annotation.region === regionId);
+    }
 
     return (
         <section style={{ display: "flex", flexDirection: "column", gap: 16, height: "100%" }}>
@@ -392,6 +443,7 @@ function DocumentViewerPage() {
                                 if (!bbox) return null;
                                 const ls = langStyle(region.language);
                                 const isActive = activeRegionId === region.id;
+                                const hasAnnotations = getRegionAnnotations(region.id).length > 0;
                                 return (
                                     <div
                                         key={region.id}
@@ -403,14 +455,32 @@ function DocumentViewerPage() {
                                             top: bbox.top,
                                             width: bbox.width,
                                             height: bbox.height,
-                                            border: `2px solid ${ls.border}`,
+                                            border: `2px solid ${hasAnnotations ? "#ffd166" : ls.border}`,
                                             background: isActive ? ls.bg.replace("0.18", "0.38") : ls.bg,
-                                            boxShadow: isActive ? `0 0 0 3px ${ls.border}66` : "none",
+                                            boxShadow: isActive ? `0 0 0 3px ${hasAnnotations ? "#ffd16666" : `${ls.border}66`}` : "none",
                                             cursor: "pointer",
                                             transition: "background 0.15s, box-shadow 0.15s",
                                             boxSizing: "border-box",
                                         }}
-                                    />
+                                    >
+                                        {hasAnnotations && (
+                                            <span
+                                                style={{
+                                                    position: "absolute",
+                                                    top: -10,
+                                                    right: -10,
+                                                    background: "#ffd166",
+                                                    color: "#1d1d1d",
+                                                    borderRadius: 999,
+                                                    fontSize: "0.65rem",
+                                                    padding: "1px 6px",
+                                                    fontWeight: 700,
+                                                }}
+                                            >
+                                                A
+                                            </span>
+                                        )}
+                                    </div>
                                 );
                             })}
                         </div>
@@ -451,6 +521,7 @@ function DocumentViewerPage() {
                         const isActive = activeRegionId === region.id;
                         const text = (showRaw ? region.raw_text : region.corrected_text) || region.raw_text || "";
                         const isAnnotating = annotationRegionId === region.id;
+                        const regionAnnotations = getRegionAnnotations(region.id);
 
                         return (
                             <div
@@ -489,8 +560,19 @@ function DocumentViewerPage() {
                                             className="btn-icon"
                                             onClick={(e) => {
                                                 e.stopPropagation();
+                                                const latest = regionAnnotations[0] || null;
                                                 setAnnotationRegionId((prev) => prev === region.id ? null : region.id);
-                                                setAnnotation(region.annotation || "");
+                                                if (latest) {
+                                                    setEditingAnnotationId(latest.id);
+                                                    setAnnotationCategory(latest.category || "Note");
+                                                    setAnnotationNote(latest.note || "");
+                                                    setAnnotationCustomTag(latest.custom_tag?.name || "");
+                                                } else {
+                                                    setEditingAnnotationId(null);
+                                                    setAnnotationCategory("Note");
+                                                    setAnnotationNote("");
+                                                    setAnnotationCustomTag("");
+                                                }
                                             }}
                                             title="Annotate"
                                         >✏️</button>
@@ -510,10 +592,20 @@ function DocumentViewerPage() {
                                 </p>
 
                                 {/* Annotation display */}
-                                {region.annotation && !isAnnotating && (
-                                    <p style={{ margin: "8px 0 0", fontSize: "0.8rem", color: "#f0a328", fontStyle: "italic" }}>
-                                        📝 {region.annotation}
-                                    </p>
+                                {!isAnnotating && regionAnnotations.length > 0 && (
+                                    <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+                                        {regionAnnotations.slice(0, 2).map((annotation) => (
+                                            <div key={annotation.id} style={{ borderLeft: "2px solid #ffd166", paddingLeft: 8 }}>
+                                                <p style={{ margin: 0, fontSize: "0.75rem", color: "#ffd166", fontWeight: 600 }}>
+                                                    {annotation.category}
+                                                    {annotation.custom_tag?.name ? ` · #${annotation.custom_tag.name}` : ""}
+                                                </p>
+                                                <p style={{ margin: "3px 0 0", fontSize: "0.8rem", color: "#f0e6c0" }}>
+                                                    {annotation.note || "No note"}
+                                                </p>
+                                            </div>
+                                        ))}
+                                    </div>
                                 )}
 
                                 {/* Region tags */}
@@ -531,16 +623,48 @@ function DocumentViewerPage() {
 
                                         {/* Annotation form */}
                                         {isAnnotating && (
-                                            <form onSubmit={handleSaveAnnotation} style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-                                                <input
-                                                    value={annotation}
-                                                    onChange={(e) => setAnnotation(e.target.value)}
-                                                    placeholder="Add annotation…"
-                                                    style={{ flex: 1, margin: 0, padding: "5px 8px", fontSize: "0.82rem" }}
+                                            <form onSubmit={handleSaveAnnotation} style={{ display: "grid", gap: 6, marginBottom: 8 }}>
+                                                <select
+                                                    value={annotationCategory}
+                                                    onChange={(e) => setAnnotationCategory(e.target.value)}
+                                                    style={{ margin: 0, padding: "6px 8px", fontSize: "0.82rem" }}
+                                                >
+                                                    <option value="Signature">Signature</option>
+                                                    <option value="Stamp">Stamp</option>
+                                                    <option value="Name">Name</option>
+                                                    <option value="Date">Date</option>
+                                                    <option value="Amount">Amount</option>
+                                                    <option value="Clause">Clause</option>
+                                                    <option value="Note">Note</option>
+                                                </select>
+                                                <textarea
+                                                    value={annotationNote}
+                                                    onChange={(e) => setAnnotationNote(e.target.value)}
+                                                    placeholder="Add note/comment…"
+                                                    style={{ margin: 0, padding: "6px 8px", fontSize: "0.82rem", minHeight: 58 }}
                                                     autoFocus
                                                 />
-                                                <button type="submit" style={{ margin: 0, width: "auto", padding: "5px 10px", fontSize: "0.82rem" }}>Save</button>
-                                                <button type="button" onClick={() => setAnnotationRegionId(null)} style={{ margin: 0, width: "auto", padding: "5px 10px", fontSize: "0.82rem", background: "transparent", border: "1px solid var(--border)", color: "var(--text-muted)" }}>Cancel</button>
+                                                <input
+                                                    value={annotationCustomTag}
+                                                    onChange={(e) => setAnnotationCustomTag(e.target.value)}
+                                                    placeholder="Optional custom tag…"
+                                                    style={{ margin: 0, padding: "6px 8px", fontSize: "0.82rem" }}
+                                                />
+                                                <div style={{ display: "flex", gap: 6 }}>
+                                                    <button type="submit" style={{ margin: 0, width: "auto", padding: "5px 10px", fontSize: "0.82rem" }}>
+                                                        {editingAnnotationId ? "Update" : "Save"}
+                                                    </button>
+                                                    {editingAnnotationId && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleDeleteAnnotation(editingAnnotationId)}
+                                                            style={{ margin: 0, width: "auto", padding: "5px 10px", fontSize: "0.82rem", background: "rgba(240,82,82,0.18)", border: "1px solid #f0525266" }}
+                                                        >
+                                                            Delete
+                                                        </button>
+                                                    )}
+                                                    <button type="button" onClick={() => { setAnnotationRegionId(null); setEditingAnnotationId(null); }} style={{ margin: 0, width: "auto", padding: "5px 10px", fontSize: "0.82rem", background: "transparent", border: "1px solid var(--border)", color: "var(--text-muted)" }}>Cancel</button>
+                                                </div>
                                             </form>
                                         )}
 
@@ -559,6 +683,38 @@ function DocumentViewerPage() {
                             </div>
                         );
                     })}
+
+                    {/* Annotation side panel list */}
+                    <section style={{ marginTop: 12, borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+                        <h4 style={{ margin: 0, fontSize: "0.92rem" }}>Annotations (Page {currentPage})</h4>
+                        {currentPageAnnotations.length === 0 && (
+                            <p className="muted-text" style={{ marginTop: 8 }}>No annotations on this page.</p>
+                        )}
+                        {currentPageAnnotations.map((annotation) => (
+                            <article
+                                key={annotation.id}
+                                className="region-card"
+                                style={{ borderLeft: "3px solid #ffd166", marginTop: 8, cursor: "pointer" }}
+                                onClick={() => {
+                                    setActiveRegionId(annotation.region);
+                                    setAnnotationRegionId(annotation.region);
+                                    setEditingAnnotationId(annotation.id);
+                                    setAnnotationCategory(annotation.category || "Note");
+                                    setAnnotationNote(annotation.note || "");
+                                    setAnnotationCustomTag(annotation.custom_tag?.name || "");
+                                    setTimeout(() => {
+                                        regionRefs.current[annotation.region]?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                                    }, 50);
+                                }}
+                            >
+                                <p style={{ margin: 0, fontSize: "0.76rem", color: "#ffd166", fontWeight: 700 }}>
+                                    {annotation.category}
+                                    {annotation.custom_tag?.name ? ` · #${annotation.custom_tag.name}` : ""}
+                                </p>
+                                <p style={{ margin: "6px 0 0", fontSize: "0.82rem" }}>{annotation.note || "No note"}</p>
+                            </article>
+                        ))}
+                    </section>
                 </div>
             </div>
         </section>
