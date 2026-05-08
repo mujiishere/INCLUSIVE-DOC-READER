@@ -1,11 +1,12 @@
 // Blocks access to child routes when token is missing.
 import { useEffect, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 
 import { getCurrentUser, getToken } from "../services/authService";
 
 
 function ProtectedRoute({ children, requireAdmin = false }) {
+    const location = useLocation();
     const [isLoading, setIsLoading] = useState(true);
     const [isAllowed, setIsAllowed] = useState(false);
 
@@ -42,11 +43,13 @@ function ProtectedRoute({ children, requireAdmin = false }) {
     }
 
     if (requireAdmin && !isAllowed) {
-        return <Navigate to="/admin-login" replace />;
+        const next = encodeURIComponent(`${location.pathname}${location.search}`);
+        return <Navigate to={`/auth?role=admin&next=${next}`} replace />;
     }
 
     if (!getToken()) {
-        return <Navigate to="/login" replace />;
+        const next = encodeURIComponent(`${location.pathname}${location.search}`);
+        return <Navigate to={`/auth?next=${next}`} replace />;
     }
 
     return children;

@@ -31,7 +31,7 @@ function Navbar() {
 
     function handleLogout() {
         clearToken();
-        navigate("/login");
+        navigate("/auth");
     }
 
     const menuItems = [
