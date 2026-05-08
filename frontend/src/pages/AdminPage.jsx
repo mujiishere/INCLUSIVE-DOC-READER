@@ -41,12 +41,16 @@ function AdminPage() {
 
                 <article className="glass-card">
                     <h3>Document Governance</h3>
-                    <p>Track flagged files, audit OCR quality, and manage tagging policies.</p>
+                    <p>
+                        Total Docs: {summary ? summary.total_documents : "-"} | Completed: {summary ? summary.completed_documents : "-"}
+                    </p>
                 </article>
 
                 <article className="glass-card">
                     <h3>System Insights</h3>
-                    <p>Staff Users: {summary ? summary.staff_users : "-"}</p>
+                    <p>
+                        Staff Users: {summary ? summary.staff_users : "-"} | Processing: {summary ? summary.processing_documents : "-"} | Failed: {summary ? summary.failed_documents : "-"}
+                    </p>
                 </article>
             </div>
         </section>

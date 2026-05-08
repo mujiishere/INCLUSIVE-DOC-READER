@@ -42,7 +42,7 @@ function ProtectedRoute({ children, requireAdmin = false }) {
     }
 
     if (requireAdmin && !isAllowed) {
-        return <Navigate to="/dashboard" replace />;
+        return <Navigate to="/admin-login" replace />;
     }
 
     if (!getToken()) {

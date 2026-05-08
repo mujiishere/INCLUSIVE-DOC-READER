@@ -297,6 +297,16 @@ function DocumentViewerPage() {
         return documentAnnotations.filter((annotation) => annotation.region === regionId);
     }
 
+    function getRegionDisplayText(region) {
+        if (showRaw) {
+            return region.raw_text || "";
+        }
+        if (region.corrected_text && region.corrected_text.trim()) {
+            return region.corrected_text;
+        }
+        return "[No corrected text available yet for this region]";
+    }
+
     return (
         <section style={{ display: "flex", flexDirection: "column", gap: 16, height: "100%" }}>
 
@@ -519,7 +529,7 @@ function DocumentViewerPage() {
                     {filteredRegions.map((region) => {
                         const ls = langStyle(region.language);
                         const isActive = activeRegionId === region.id;
-                        const text = (showRaw ? region.raw_text : region.corrected_text) || region.raw_text || "";
+                        const text = getRegionDisplayText(region);
                         const isAnnotating = annotationRegionId === region.id;
                         const regionAnnotations = getRegionAnnotations(region.id);
 

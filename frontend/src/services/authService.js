@@ -14,6 +14,18 @@ export async function loginUser(payload) {
 }
 
 
+export async function loginNormalUser(payload) {
+    const response = await api.post("/login/user/", payload);
+    return response.data;
+}
+
+
+export async function loginAdminUser(payload) {
+    const response = await api.post("/login/admin/", payload);
+    return response.data;
+}
+
+
 export async function getCurrentUser() {
     const response = await api.get("/me/");
     return response.data;

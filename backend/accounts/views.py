@@ -2,6 +2,7 @@
 
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
+from django.db.models import Count
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view, permission_classes
@@ -26,7 +27,7 @@ def register_view(request):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def login_view(request):
-    """Validate credentials and return token for React app."""
+    """Validate credentials and return token (legacy unified login)."""
     username = request.data.get("username")
     password = request.data.get("password")
 
@@ -45,6 +46,60 @@ def login_view(request):
     return Response({"token": token.key}, status=status.HTTP_200_OK)
 
 
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def user_login_view(request):
+    """Login endpoint dedicated to normal users (non-staff accounts)."""
+    username = request.data.get("username")
+    password = request.data.get("password")
+
+    if not username or not password:
+        return Response(
+            {"error": "Username and password are required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    user = authenticate(username=username, password=password)
+    if not user:
+        return Response({"error": "Invalid credentials"}, status=status.HTTP_400_BAD_REQUEST)
+
+    if user.is_staff or user.is_superuser:
+        return Response(
+            {"error": "Admin account detected. Please use Admin Login."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    token, _ = Token.objects.get_or_create(user=user)
+    return Response({"token": token.key}, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def admin_login_view(request):
+    """Login endpoint dedicated to admin accounts only."""
+    username = request.data.get("username")
+    password = request.data.get("password")
+
+    if not username or not password:
+        return Response(
+            {"error": "Username and password are required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    user = authenticate(username=username, password=password)
+    if not user:
+        return Response({"error": "Invalid credentials"}, status=status.HTTP_400_BAD_REQUEST)
+
+    if not (user.is_staff or user.is_superuser):
+        return Response(
+            {"error": "This account is not an admin account."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    token, _ = Token.objects.get_or_create(user=user)
+    return Response({"token": token.key}, status=status.HTTP_200_OK)
+
+
 @api_view(["GET"])
 def admin_summary_view(request):
     """Return simple admin-level summary metrics."""
@@ -55,11 +110,28 @@ def admin_summary_view(request):
     active_users = User.objects.filter(is_active=True).count()
     staff_users = User.objects.filter(is_staff=True).count()
 
+    from documents.models import Document
+
+    total_documents = Document.objects.count()
+    completed_documents = Document.objects.filter(status=Document.Status.COMPLETED).count()
+    processing_documents = Document.objects.filter(
+        status__in=[
+            Document.Status.PENDING,
+            Document.Status.OCR_PROCESSING,
+            Document.Status.AI_CORRECTION,
+        ]
+    ).count()
+    failed_documents = Document.objects.filter(status=Document.Status.FAILED).count()
+
     return Response(
         {
             "total_users": total_users,
             "active_users": active_users,
             "staff_users": staff_users,
+            "total_documents": total_documents,
+            "completed_documents": completed_documents,
+            "processing_documents": processing_documents,
+            "failed_documents": failed_documents,
         }
     )
 
@@ -70,7 +142,7 @@ def admin_users_view(request):
     if not request.user.is_staff:
         return Response({"error": "Admin access required."}, status=status.HTTP_403_FORBIDDEN)
 
-    users = User.objects.order_by("username")
+    users = User.objects.annotate(documents_uploaded=Count("documents")).order_by("username")
     payload = [
         {
             "id": user.id,
@@ -78,6 +150,7 @@ def admin_users_view(request):
             "email": user.email,
             "is_active": user.is_active,
             "is_staff": user.is_staff,
+            "documents_uploaded": user.documents_uploaded,
         }
         for user in users
     ]
