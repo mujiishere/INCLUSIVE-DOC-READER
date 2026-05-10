@@ -207,7 +207,11 @@ function DocumentListPage() {
                         )}
 
                         <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-                            <Link to={`/documents/${doc.id}`} className="btn-link-primary" style={{ flex: 1, textAlign: "center" }}>
+                            <Link
+                                to={`/documents/${doc.id}?q=${encodeURIComponent(query || "")}${doc.match_page ? `&page=${doc.match_page}` : ""}`}
+                                className="btn-link-primary"
+                                style={{ flex: 1, textAlign: "center" }}
+                            >
                                 View
                             </Link>
                             <button

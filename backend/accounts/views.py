@@ -2,7 +2,7 @@
 
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
-from django.db.models import Count
+from django.db.models import Count, Q
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view, permission_classes
@@ -142,7 +142,24 @@ def admin_users_view(request):
     if not request.user.is_staff:
         return Response({"error": "Admin access required."}, status=status.HTTP_403_FORBIDDEN)
 
-    users = User.objects.annotate(documents_uploaded=Count("documents")).order_by("username")
+    users = User.objects.annotate(
+        documents_uploaded=Count("documents", distinct=True),
+        documents_completed=Count(
+            "documents",
+            filter=Q(documents__status="completed"),
+            distinct=True,
+        ),
+        documents_processing=Count(
+            "documents",
+            filter=Q(documents__status__in=["pending", "ocr_processing", "ai_correction"]),
+            distinct=True,
+        ),
+        documents_failed=Count(
+            "documents",
+            filter=Q(documents__status="failed"),
+            distinct=True,
+        ),
+    ).order_by("username")
     payload = [
         {
             "id": user.id,
@@ -151,6 +168,9 @@ def admin_users_view(request):
             "is_active": user.is_active,
             "is_staff": user.is_staff,
             "documents_uploaded": user.documents_uploaded,
+            "documents_completed": user.documents_completed,
+            "documents_processing": user.documents_processing,
+            "documents_failed": user.documents_failed,
         }
         for user in users
     ]

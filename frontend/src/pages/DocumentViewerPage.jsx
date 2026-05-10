@@ -1,6 +1,6 @@
 // Full side-by-side document viewer with region highlighting, tagging, annotation, search, and export.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 
 import StatusBadge from "../components/StatusBadge";
 import { getApiErrorMessage } from "../services/api";
@@ -41,6 +41,10 @@ const PROCESSING = new Set(["pending", "ocr_processing", "ai_correction"]);
 
 function DocumentViewerPage() {
     const { id } = useParams();
+    const location = useLocation();
+    const searchParams = new URLSearchParams(location.search);
+    const queryKeyword = searchParams.get("q") || "";
+    const queryPage = Number(searchParams.get("page") || "1");
     const [document, setDocument] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [pageData, setPageData] = useState(null);
@@ -67,9 +71,13 @@ function DocumentViewerPage() {
 
     // ── Load document ────────────────────────────────────────────────────
     useEffect(() => {
+        setKeyword(queryKeyword);
+    }, [queryKeyword, id]);
+
+    useEffect(() => {
         loadDocument();
         return () => clearInterval(pollRef.current);
-    }, [id]);
+    }, [id, location.search]);
 
     async function loadDocument() {
         try {
@@ -77,7 +85,11 @@ function DocumentViewerPage() {
             setDocument(data);
             setDocumentAnnotations(data.annotations || []);
             if (data.page_count > 0) {
-                loadPage(id, 1);
+                const startPage = Number.isFinite(queryPage) && queryPage > 0
+                    ? Math.min(queryPage, data.page_count)
+                    : 1;
+                setCurrentPage(startPage);
+                loadPage(id, startPage);
             }
             // Poll if still processing
             if (PROCESSING.has(data.status)) {
@@ -259,7 +271,11 @@ function DocumentViewerPage() {
     function handleCopyText() {
         if (!pageData) return;
         const text = pageData.regions
-            .map((r) => (showRaw ? r.raw_text : r.corrected_text) || r.raw_text)
+            .map((r) => {
+                const value = showRaw ? r.raw_text : r.corrected_text;
+                return (value || "").trim();
+            })
+            .filter(Boolean)
             .join("\n\n");
         navigator.clipboard.writeText(text).then(() => flash("Text copied!"));
     }
@@ -284,7 +300,7 @@ function DocumentViewerPage() {
     // Filter regions by keyword (for text panel)
     const filteredRegions = keyword
         ? regions.filter((r) => {
-            const text = (showRaw ? r.raw_text : r.corrected_text) || r.raw_text || "";
+            const text = getRegionDisplayText(r);
             return text.toLowerCase().includes(keyword.toLowerCase());
         })
         : regions;

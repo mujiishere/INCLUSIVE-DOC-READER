@@ -1,52 +1,53 @@
-// Blocks access to child routes when token is missing.
+// Blocks access to routes based on auth role requirements.
 import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 
 import { getCurrentUser, getToken } from "../services/authService";
 
 
-function ProtectedRoute({ children, requireAdmin = false }) {
+function ProtectedRoute({ children, requireAdmin = false, requireUser = false }) {
     const [isLoading, setIsLoading] = useState(true);
-    const [isAllowed, setIsAllowed] = useState(false);
+    const [state, setState] = useState({ isAuthenticated: false, isAdmin: false });
 
     useEffect(() => {
         async function checkAccess() {
             const token = getToken();
             if (!token) {
-                setIsAllowed(false);
-                setIsLoading(false);
-                return;
-            }
-
-            if (!requireAdmin) {
-                setIsAllowed(true);
+                setState({ isAuthenticated: false, isAdmin: false });
                 setIsLoading(false);
                 return;
             }
 
             try {
                 const user = await getCurrentUser();
-                setIsAllowed(Boolean(user.is_staff || user.is_superuser));
+                setState({
+                    isAuthenticated: true,
+                    isAdmin: Boolean(user.is_staff || user.is_superuser),
+                });
             } catch {
-                setIsAllowed(false);
+                setState({ isAuthenticated: false, isAdmin: false });
             } finally {
                 setIsLoading(false);
             }
         }
 
         checkAccess();
-    }, [requireAdmin]);
+    }, [requireAdmin, requireUser]);
 
     if (isLoading) {
         return <p>Checking access...</p>;
     }
 
-    if (requireAdmin && !isAllowed) {
-        return <Navigate to="/admin-login" replace />;
+    if (!state.isAuthenticated) {
+        return <Navigate to={requireAdmin ? "/admin-login" : "/login"} replace />;
     }
 
-    if (!getToken()) {
-        return <Navigate to="/login" replace />;
+    if (requireAdmin && !state.isAdmin) {
+        return <Navigate to="/dashboard" replace />;
+    }
+
+    if (requireUser && state.isAdmin) {
+        return <Navigate to="/admin" replace />;
     }
 
     return children;

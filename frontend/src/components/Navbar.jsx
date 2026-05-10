@@ -34,12 +34,16 @@ function Navbar() {
         navigate("/login");
     }
 
-    const menuItems = [
-        { to: "/dashboard", label: "Dashboard" },
-        { to: "/upload", label: "Upload" },
-        { to: "/search", label: "Search" },
-        ...(isAdmin ? [{ to: "/admin", label: "Admin" }, { to: "/users", label: "Users" }] : []),
-    ];
+    const menuItems = isAdmin
+        ? [
+            { to: "/admin", label: "Admin Dashboard" },
+            { to: "/users", label: "Users" },
+        ]
+        : [
+            { to: "/dashboard", label: "Dashboard" },
+            { to: "/upload", label: "Upload" },
+            { to: "/search", label: "Search" },
+        ];
 
     function isActivePath(path) {
         if (path === "/search") {

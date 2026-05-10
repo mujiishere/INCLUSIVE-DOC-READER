@@ -51,7 +51,10 @@ function UsersPage() {
                     <span>Email</span>
                     <span>Role</span>
                     <span>Status</span>
-                    <span>Documents</span>
+                    <span>Uploaded</span>
+                    <span>Completed</span>
+                    <span>Processing</span>
+                    <span>Failed</span>
                 </div>
 
                 {users.map((user) => (
@@ -61,6 +64,9 @@ function UsersPage() {
                         <span>{getRole(user)}</span>
                         <span className="status-pill">{getStatus(user)}</span>
                         <span>{user.documents_uploaded ?? 0}</span>
+                        <span>{user.documents_completed ?? 0}</span>
+                        <span>{user.documents_processing ?? 0}</span>
+                        <span>{user.documents_failed ?? 0}</span>
                     </div>
                 ))}
                 {users.length === 0 && <p className="muted-text">No users available.</p>}

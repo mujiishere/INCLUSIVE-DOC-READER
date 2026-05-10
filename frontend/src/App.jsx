@@ -20,11 +20,39 @@ function AppShell() {
             <Navbar />
             <main className="main-content">
                 <Routes>
-                    <Route path="/dashboard" element={<DashboardPage />} />
-                    <Route path="/upload" element={<UploadPage />} />
-                    <Route path="/search" element={<DocumentListPage />} />
+                    <Route
+                        path="/dashboard"
+                        element={
+                            <ProtectedRoute requireUser>
+                                <DashboardPage />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/upload"
+                        element={
+                            <ProtectedRoute requireUser>
+                                <UploadPage />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/search"
+                        element={
+                            <ProtectedRoute requireUser>
+                                <DocumentListPage />
+                            </ProtectedRoute>
+                        }
+                    />
                     <Route path="/documents" element={<Navigate to="/search" replace />} />
-                    <Route path="/documents/:id" element={<DocumentViewerPage />} />
+                    <Route
+                        path="/documents/:id"
+                        element={
+                            <ProtectedRoute requireUser>
+                                <DocumentViewerPage />
+                            </ProtectedRoute>
+                        }
+                    />
                     <Route
                         path="/admin"
                         element={

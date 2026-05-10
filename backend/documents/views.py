@@ -436,9 +436,11 @@ def search_documents(request):
             snippet_regions = snippet_regions.filter(language=lang)
 
         snippet = ""
+        match_page = None
         sr = snippet_regions.first()
         if sr:
             text = sr.corrected_text or sr.raw_text
+            match_page = sr.page.page_number
             # Excerpt around the match
             idx = text.lower().find(query.lower()) if query else 0
             start = max(0, idx - 60)
@@ -455,6 +457,7 @@ def search_documents(request):
 
         doc_data = DocumentSerializer(doc, context={"request": request}).data
         doc_data["snippet"] = snippet
+        doc_data["match_page"] = match_page
         results.append(doc_data)
 
     return Response({"results": results, "total": len(results)})
