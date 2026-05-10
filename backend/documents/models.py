@@ -55,6 +55,8 @@ class Document(models.Model):
     title = models.CharField(max_length=255, blank=True)
     original_filename = models.CharField(max_length=512, blank=True)
     file = models.FileField(upload_to="uploads/")
+    cloudinary_url = models.URLField(blank=True, default="")
+    cloudinary_public_id = models.CharField(max_length=255, blank=True, default="")
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
@@ -103,6 +105,8 @@ class DocumentPage(models.Model):
     page_number = models.PositiveIntegerField()
     # Rendered page image stored separately for the viewer
     image_file = models.ImageField(upload_to="pages/", blank=True, null=True)
+    cloudinary_image_url = models.URLField(blank=True, default="")
+    cloudinary_image_public_id = models.CharField(max_length=255, blank=True, default="")
     width = models.PositiveIntegerField(default=0)
     height = models.PositiveIntegerField(default=0)
 

@@ -14,6 +14,8 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
 from .models import Document, DocumentPage, DocumentTag, RegionAnnotation, TextRegion
+from .cloudinary_service import delete_asset
+from .mongo_service import delete_document_snapshot, sync_document_snapshot
 from .pipeline import start_processing
 from .serializers import (
     DocumentDetailSerializer,
@@ -67,6 +69,11 @@ def upload_document(request):
         original_filename=original_name,
         status=Document.Status.PENDING,
     )
+
+    try:
+        sync_document_snapshot(doc)
+    except Exception:
+        pass
 
     # Kick off async processing in a background thread
     start_processing(doc.pk)
@@ -123,6 +130,23 @@ class DocumentDetailView(generics.RetrieveDestroyAPIView):
 
     def destroy(self, request, *args, **kwargs):
         doc = self.get_object()
+        doc_id = doc.pk
+        document_public_id = doc.cloudinary_public_id
+        page_public_ids = [
+            public_id
+            for public_id in doc.pages.values_list("cloudinary_image_public_id", flat=True)
+            if public_id
+        ]
+
+        # Best-effort cloud cleanup.
+        try:
+            if document_public_id:
+                delete_asset(document_public_id, resource_type="raw")
+            for public_id in page_public_ids:
+                delete_asset(public_id, resource_type="image")
+        except Exception:
+            pass
+
         # Delete physical files
         try:
             if doc.file and os.path.isfile(doc.file.path):
@@ -137,6 +161,12 @@ class DocumentDetailView(generics.RetrieveDestroyAPIView):
             except Exception:
                 pass
         doc.delete()
+
+        try:
+            delete_document_snapshot(doc_id)
+        except Exception:
+            pass
+
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -215,6 +245,12 @@ def document_tags(request, pk):
 
     tag, _ = DocumentTag.objects.get_or_create(user=request.user, name=name)
     doc.tags.add(tag)
+
+    try:
+        sync_document_snapshot(doc)
+    except Exception:
+        pass
+
     return Response(DocumentTagSerializer(tag).data, status=status.HTTP_201_CREATED)
 
 
@@ -228,6 +264,12 @@ def document_tag_remove(request, pk, tag_id):
         return Response({"error": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
     doc.tags.remove(tag)
+
+    try:
+        sync_document_snapshot(doc)
+    except Exception:
+        pass
+
     return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -273,6 +315,12 @@ def create_region_annotation(request, region_id):
     region.save(update_fields=["annotation"])
 
     serializer = RegionAnnotationSerializer(annotation)
+
+    try:
+        sync_document_snapshot(region.page.document)
+    except Exception:
+        pass
+
     return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
@@ -294,6 +342,12 @@ def region_annotation_detail(request, annotation_id):
         latest = region.annotations.order_by("-updated_at").first()
         region.annotation = latest.note if latest else ""
         region.save(update_fields=["annotation"])
+
+        try:
+            sync_document_snapshot(region.page.document)
+        except Exception:
+            pass
+
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     category = request.data.get("category")
@@ -330,6 +384,12 @@ def region_annotation_detail(request, annotation_id):
     region.save(update_fields=["annotation"])
 
     serializer = RegionAnnotationSerializer(annotation)
+
+    try:
+        sync_document_snapshot(region.page.document)
+    except Exception:
+        pass
+
     return Response(serializer.data)
 
 
@@ -364,6 +424,12 @@ def region_add_tag(request, region_id):
 
     tag, _ = DocumentTag.objects.get_or_create(user=request.user, name=name)
     region.tags.add(tag)
+
+    try:
+        sync_document_snapshot(region.page.document)
+    except Exception:
+        pass
+
     return Response(DocumentTagSerializer(tag).data, status=status.HTTP_201_CREATED)
 
 
@@ -377,6 +443,12 @@ def region_remove_tag(request, region_id, tag_id):
         return Response({"error": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
     region.tags.remove(tag)
+
+    try:
+        sync_document_snapshot(region.page.document)
+    except Exception:
+        pass
+
     return Response(status=status.HTTP_204_NO_CONTENT)
 
 

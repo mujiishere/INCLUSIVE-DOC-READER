@@ -80,6 +80,8 @@ class DocumentPageSerializer(serializers.ModelSerializer):
         read_only_fields = ["id"]
 
     def get_image_url(self, obj):
+        if obj.cloudinary_image_url:
+            return obj.cloudinary_image_url
         request = self.context.get("request")
         if obj.image_file and request:
             return request.build_absolute_uri(obj.image_file.url)
@@ -95,6 +97,8 @@ class DocumentPageListSerializer(serializers.ModelSerializer):
         fields = ["id", "page_number", "image_url", "width", "height"]
 
     def get_image_url(self, obj):
+        if obj.cloudinary_image_url:
+            return obj.cloudinary_image_url
         request = self.context.get("request")
         if obj.image_file and request:
             return request.build_absolute_uri(obj.image_file.url)
@@ -121,6 +125,8 @@ class DocumentSerializer(serializers.ModelSerializer):
         return obj.get_languages_list()
 
     def get_file_url(self, obj):
+        if obj.cloudinary_url:
+            return obj.cloudinary_url
         request = self.context.get("request")
         if obj.file and request:
             return request.build_absolute_uri(obj.file.url)

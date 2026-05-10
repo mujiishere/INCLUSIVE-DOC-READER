@@ -52,15 +52,19 @@ def start_processing(document_id: int) -> None:
 def _run_pipeline(document_id: int) -> None:
     """Full OCR + AI correction pipeline for one document."""
     # Import here to avoid circular imports and ensure Django is ready
-    from .models import Document, DocumentPage, TextRegion
+    from .models import Document, TextRegion  # type: ignore[attr-defined]
     from .ai_corrector import correct_regions
+    from .cloudinary_service import upload_document_file
+    from .mongo_service import sync_document_snapshot
     from .ocr_engine import run_ocr_on_image
     from .pdf_utils import file_to_pages
     from .preprocessor import preprocess_image
 
+    local_file_path = None
+
     try:
-        document = Document.objects.get(pk=document_id)
-    except Document.DoesNotExist:
+        document = Document.objects.get(pk=document_id)  # type: ignore[attr-defined]
+    except Document.DoesNotExist:  # type: ignore[attr-defined]
         logger.error("Document %s not found in pipeline.", document_id)
         return
 
@@ -70,11 +74,24 @@ def _run_pipeline(document_id: int) -> None:
         document.error_message = ""
         document.save(update_fields=["status", "error_message", "updated_at"])
 
+        # Best-effort cloud upload for original file.
+        try:
+            upload_result = upload_document_file(document.file.path, document.pk)
+            if upload_result:
+                document.cloudinary_url = upload_result.get("url", "")
+                document.cloudinary_public_id = upload_result.get("public_id", "")
+                document.save(update_fields=["cloudinary_url", "cloudinary_public_id", "updated_at"])
+        except Exception as exc:
+            logger.warning("Cloudinary document upload skipped for %s: %s", document_id, exc)
+
+        _sync_snapshot_safe(sync_document_snapshot, document)
+
         file_path = document.file.path
         local_file_path = _prepare_local_processing_copy(file_path)
         pages_data = file_to_pages(local_file_path)
         document.page_count = len(pages_data)
         document.save(update_fields=["page_count", "updated_at"])
+        _sync_snapshot_safe(sync_document_snapshot, document)
 
         all_langs: set = set()
         page_region_map: dict = {}  # page_obj → [region dicts]
@@ -95,7 +112,7 @@ def _run_pipeline(document_id: int) -> None:
             saved_regions = []
             for rd in region_data_list:
                 bbox = rd.get("bbox", [0, 0, 0, 0])
-                region = TextRegion.objects.create(
+                region = TextRegion.objects.create(  # type: ignore[attr-defined]
                     page=page_obj,
                     bbox_x=bbox[0],
                     bbox_y=bbox[1],
@@ -115,10 +132,12 @@ def _run_pipeline(document_id: int) -> None:
         # Update detected languages
         document.set_languages_list(list(all_langs))
         document.save(update_fields=["languages_detected", "updated_at"])
+        _sync_snapshot_safe(sync_document_snapshot, document)
 
         # ── Step 2: AI Correction ─────────────────────────────────────────
         document.status = Document.Status.AI_CORRECTION
         document.save(update_fields=["status", "updated_at"])
+        _sync_snapshot_safe(sync_document_snapshot, document)
 
         for page_obj, regions in page_region_map.items():
             if not regions:
@@ -144,11 +163,12 @@ def _run_pipeline(document_id: int) -> None:
                     to_update.append(region)
 
             if to_update:
-                TextRegion.objects.bulk_update(to_update, ["corrected_text"])
+                TextRegion.objects.bulk_update(to_update, ["corrected_text"])  # type: ignore[attr-defined]
 
         # ── Step 3: Completed ─────────────────────────────────────────────
         document.status = Document.Status.COMPLETED
         document.save(update_fields=["status", "updated_at"])
+        _sync_snapshot_safe(sync_document_snapshot, document)
         logger.info("Document %s processing completed.", document_id)
 
     except Exception as exc:
@@ -157,12 +177,13 @@ def _run_pipeline(document_id: int) -> None:
             document.status = Document.Status.FAILED
             document.error_message = str(exc)[:1000]
             document.save(update_fields=["status", "error_message", "updated_at"])
+            _sync_snapshot_safe(sync_document_snapshot, document)
         except Exception:
             pass
     finally:
         # Clean temporary local processing copy if created.
         try:
-            if "local_file_path" in locals() and local_file_path and local_file_path != document.file.path:
+            if local_file_path and local_file_path != document.file.path:
                 if os.path.isfile(local_file_path):
                     os.remove(local_file_path)
         except Exception:
@@ -206,10 +227,10 @@ def _prepare_local_processing_copy(file_path: str) -> str:
 
 def _save_page_image(document, page_number: int, pil_image):
     """Create/update a DocumentPage and save its rendered image to media."""
-    from .models import DocumentPage
-    from PIL import Image
+    from .models import DocumentPage  # type: ignore[attr-defined]
+    from .cloudinary_service import upload_page_image
 
-    page_obj, _ = DocumentPage.objects.get_or_create(
+    page_obj, _ = DocumentPage.objects.get_or_create(  # type: ignore[attr-defined]
         document=document,
         page_number=page_number,
         defaults={"width": pil_image.width, "height": pil_image.height},
@@ -220,8 +241,31 @@ def _save_page_image(document, page_number: int, pil_image):
     # Save page image as PNG
     buf = BytesIO()
     pil_image.save(buf, format="PNG", optimize=True)
+    image_bytes = buf.getvalue()
     filename = f"doc_{document.pk}_page_{page_number}.png"
-    page_obj.image_file.save(filename, ContentFile(buf.getvalue()), save=False)
+    page_obj.image_file.save(filename, ContentFile(image_bytes), save=False)
+
+    # Best-effort cloud upload for page image.
+    try:
+        upload_result = upload_page_image(image_bytes, document.pk, page_number)
+        if upload_result:
+            page_obj.cloudinary_image_url = upload_result.get("url", "")
+            page_obj.cloudinary_image_public_id = upload_result.get("public_id", "")
+    except Exception as exc:
+        logger.warning(
+            "Cloudinary page upload skipped for doc %s page %s: %s",
+            document.pk,
+            page_number,
+            exc,
+        )
+
     page_obj.save()
 
     return page_obj
+
+
+def _sync_snapshot_safe(sync_func, document) -> None:
+    try:
+        sync_func(document)
+    except Exception as exc:
+        logger.warning("Mongo snapshot sync skipped for document %s: %s", document.pk, exc)
