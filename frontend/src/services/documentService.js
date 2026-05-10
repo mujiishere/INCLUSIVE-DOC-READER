@@ -88,6 +88,10 @@ export async function addRegionTag(regionId, name) {
     return response.data;
 }
 
+export async function removeRegionTag(regionId, tagId) {
+    await api.delete(`/regions/${regionId}/tags/${tagId}/`);
+}
+
 
 // ── Annotation ────────────────────────────────────────────────────────────
 

@@ -1,5 +1,5 @@
 // Full side-by-side document viewer with region highlighting, tagging, annotation, search, and export.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 
 import StatusBadge from "../components/StatusBadge";
@@ -15,6 +15,7 @@ import {
     getDocumentStatus,
     getPageDetail,
     removeDocumentTag,
+    removeRegionTag,
     updateRegionAnnotation,
 } from "../services/documentService";
 
@@ -53,6 +54,7 @@ function DocumentViewerPage() {
     const [activeRegionId, setActiveRegionId] = useState(null);
     const [keyword, setKeyword] = useState("");
     const [showRaw, setShowRaw] = useState(false);
+    const [matchIndex, setMatchIndex] = useState(0);
 
     const [newDocTag, setNewDocTag] = useState("");
     const [newRegionTag, setNewRegionTag] = useState("");
@@ -68,6 +70,7 @@ function DocumentViewerPage() {
     const imgRef = useRef(null);
     const pollRef = useRef(null);
     const regionRefs = useRef({});
+    const readableSegmentRefs = useRef({});
 
     // ── Load document ────────────────────────────────────────────────────
     useEffect(() => {
@@ -158,17 +161,6 @@ function DocumentViewerPage() {
             width: region.bbox_w * sx,
             height: region.bbox_h * sy,
         };
-    }
-
-    // ── Keyword highlight ─────────────────────────────────────────────────
-    function highlightText(text) {
-        if (!keyword || !text) return text;
-        const parts = text.split(new RegExp(`(${keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi"));
-        return parts.map((p, i) =>
-            p.toLowerCase() === keyword.toLowerCase()
-                ? <mark key={i}>{p}</mark>
-                : p
-        );
     }
 
     // ── Tags ──────────────────────────────────────────────────────────────
@@ -280,21 +272,8 @@ function DocumentViewerPage() {
         navigator.clipboard.writeText(text).then(() => flash("Text copied!"));
     }
 
-    // ── Render ────────────────────────────────────────────────────────────
-    if (errorMessage) {
-        return (
-            <section>
-                <p className="error-msg">{errorMessage}</p>
-                <Link to="/search">← Back to Documents</Link>
-            </section>
-        );
-    }
-
-    if (!document) {
-        return <p className="muted-text" style={{ padding: 20 }}>Loading document…</p>;
-    }
-
-    const isProcessing = PROCESSING.has(document.status);
+    // ── Render preparation ────────────────────────────────────────────────
+    const isProcessing = PROCESSING.has(document?.status || "");
     const regions = pageData?.regions || [];
 
     // Filter regions by keyword (for text panel)
@@ -314,6 +293,9 @@ function DocumentViewerPage() {
     }
 
     function getRegionDisplayText(region) {
+        if (!region) {
+            return "";
+        }
         if (showRaw) {
             return region.raw_text || "";
         }
@@ -321,6 +303,161 @@ function DocumentViewerPage() {
             return region.corrected_text;
         }
         return "[No corrected text available yet for this region]";
+    }
+
+    const orderedRegions = useMemo(
+        () => [...regions].sort((a, b) => (a.reading_order || 0) - (b.reading_order || 0)),
+        [regions]
+    );
+
+    const matchedRegionIds = useMemo(() => {
+        if (!keyword.trim()) {
+            return [];
+        }
+        const lowerKeyword = keyword.toLowerCase();
+        return orderedRegions
+            .filter((region) => getRegionDisplayText(region).toLowerCase().includes(lowerKeyword))
+            .map((region) => region.id);
+    }, [keyword, orderedRegions, showRaw]);
+
+    const readableParagraphs = useMemo(() => {
+        const paragraphs = [];
+        let current = [];
+        let prev = null;
+
+        for (const region of orderedRegions) {
+            const text = getRegionDisplayText(region).trim();
+            if (!text) {
+                continue;
+            }
+
+            const startsNewParagraph =
+                !prev ||
+                Math.abs((region.bbox_y || 0) - (prev.bbox_y || 0)) > 30 ||
+                ((region.language || "") !== (prev.language || "") && Math.abs((region.bbox_y || 0) - (prev.bbox_y || 0)) > 12);
+
+            if (startsNewParagraph && current.length > 0) {
+                paragraphs.push({
+                    id: `para-${paragraphs.length + 1}`,
+                    segments: current,
+                });
+                current = [];
+            }
+
+            current.push({
+                regionId: region.id,
+                text,
+                language: region.language || "",
+                confidence: region.confidence,
+            });
+            prev = region;
+        }
+
+        if (current.length > 0) {
+            paragraphs.push({
+                id: `para-${paragraphs.length + 1}`,
+                segments: current,
+            });
+        }
+
+        return paragraphs;
+    }, [orderedRegions, showRaw]);
+
+    useEffect(() => {
+        if (!keyword || !orderedRegions.length) {
+            return;
+        }
+
+        const lowerKeyword = keyword.toLowerCase();
+        const firstMatch = orderedRegions.find((region) => {
+            const text = getRegionDisplayText(region).toLowerCase();
+            return text.includes(lowerKeyword);
+        });
+
+        if (firstMatch) {
+            setMatchIndex(0);
+            setActiveRegionId(firstMatch.id);
+            const ref = readableSegmentRefs.current[firstMatch.id];
+            if (ref) {
+                ref.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+        }
+    }, [keyword, orderedRegions, showRaw]);
+
+    useEffect(() => {
+        function handleKeyNavigation(event) {
+            if (event.key !== "Enter" || !keyword.trim()) {
+                return;
+            }
+
+            const tagName = (event.target?.tagName || "").toLowerCase();
+            if (tagName === "input" || tagName === "textarea" || tagName === "select") {
+                return;
+            }
+
+            event.preventDefault();
+            if (event.shiftKey) {
+                jumpToMatch(matchIndex - 1);
+            } else {
+                jumpToMatch(matchIndex + 1);
+            }
+        }
+
+        window.addEventListener("keydown", handleKeyNavigation);
+        return () => window.removeEventListener("keydown", handleKeyNavigation);
+    }, [keyword, matchIndex, matchedRegionIds]);
+
+    function jumpToMatch(nextIndex) {
+        if (!matchedRegionIds.length) {
+            return;
+        }
+        const normalized = ((nextIndex % matchedRegionIds.length) + matchedRegionIds.length) % matchedRegionIds.length;
+        const targetRegionId = matchedRegionIds[normalized];
+        setMatchIndex(normalized);
+        setActiveRegionId(targetRegionId);
+        const ref = readableSegmentRefs.current[targetRegionId];
+        if (ref) {
+            ref.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+    }
+
+    async function handleRemoveRegionTag(regionId, tagId) {
+        try {
+            await removeRegionTag(regionId, tagId);
+            flash("Region tag removed.");
+            loadPage(id, currentPage);
+        } catch (err) {
+            setErrorMessage(getApiErrorMessage(err));
+        }
+    }
+
+    function renderHighlightedSegment(text) {
+        if (!keyword || !text) {
+            return text;
+        }
+
+        const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const parts = text.split(new RegExp(`(${escapedKeyword})`, "gi"));
+
+        return parts.map((part, index) => {
+            if (part.toLowerCase() === keyword.toLowerCase()) {
+                return <mark key={index} className="ocr-search-mark">{part}</mark>;
+            }
+            return <span key={index}>{part}</span>;
+        });
+    }
+
+    if (errorMessage && !document) {
+        return (
+            <section>
+                <p className="error-msg">{errorMessage}</p>
+                <Link to="/search">← Back to Documents</Link>
+            </section>
+        );
+    }
+
+    if (!document) {
+        return <p className="muted-text" style={{ padding: 20 }}>Loading document…</p>;
     }
 
     return (
@@ -423,6 +560,32 @@ function DocumentViewerPage() {
                     Copy Text
                 </button>
 
+                {keyword.trim() && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <button
+                            onClick={() => jumpToMatch(matchIndex - 1)}
+                            disabled={!matchedRegionIds.length}
+                            className="btn-sm"
+                            style={{ margin: 0, width: "auto", padding: "7px 10px" }}
+                            title="Previous match"
+                        >
+                            ↑
+                        </button>
+                        <span className="muted-text" style={{ fontSize: "0.82rem", minWidth: 90, textAlign: "center" }}>
+                            {matchedRegionIds.length ? `${matchIndex + 1} of ${matchedRegionIds.length}` : "0 matches"}
+                        </span>
+                        <button
+                            onClick={() => jumpToMatch(matchIndex + 1)}
+                            disabled={!matchedRegionIds.length}
+                            className="btn-sm"
+                            style={{ margin: 0, width: "auto", padding: "7px 10px" }}
+                            title="Next match"
+                        >
+                            ↓
+                        </button>
+                    </div>
+                )}
+
                 {/* Page navigation */}
                 {document.page_count > 1 && (
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" }}>
@@ -470,6 +633,12 @@ function DocumentViewerPage() {
                                 const ls = langStyle(region.language);
                                 const isActive = activeRegionId === region.id;
                                 const hasAnnotations = getRegionAnnotations(region.id).length > 0;
+                                const isMatch = matchedRegionIds.includes(region.id);
+                                const shouldShowOverlay = isActive || hasAnnotations || isMatch;
+
+                                if (!shouldShowOverlay) {
+                                    return null;
+                                }
                                 return (
                                     <div
                                         key={region.id}
@@ -481,21 +650,25 @@ function DocumentViewerPage() {
                                             top: bbox.top,
                                             width: bbox.width,
                                             height: bbox.height,
-                                            border: `2px solid ${hasAnnotations ? "#ffd166" : ls.border}`,
-                                            background: isActive ? ls.bg.replace("0.18", "0.38") : ls.bg,
+                                            border: `2px solid ${isMatch ? "#ffde7a" : hasAnnotations ? "#ffd166" : ls.border}`,
+                                            background: isActive
+                                                ? ls.bg.replace("0.18", "0.38")
+                                                : isMatch
+                                                    ? "rgba(255, 222, 122, 0.18)"
+                                                    : ls.bg,
                                             boxShadow: isActive ? `0 0 0 3px ${hasAnnotations ? "#ffd16666" : `${ls.border}66`}` : "none",
                                             cursor: "pointer",
                                             transition: "background 0.15s, box-shadow 0.15s",
                                             boxSizing: "border-box",
                                         }}
                                     >
-                                        {hasAnnotations && (
+                                        {(hasAnnotations || isMatch) && (
                                             <span
                                                 style={{
                                                     position: "absolute",
                                                     top: -10,
                                                     right: -10,
-                                                    background: "#ffd166",
+                                                    background: isMatch ? "#ffde7a" : "#ffd166",
                                                     color: "#1d1d1d",
                                                     borderRadius: 999,
                                                     fontSize: "0.65rem",
@@ -503,7 +676,7 @@ function DocumentViewerPage() {
                                                     fontWeight: 700,
                                                 }}
                                             >
-                                                A
+                                                {isMatch ? "M" : "A"}
                                             </span>
                                         )}
                                     </div>
@@ -542,53 +715,68 @@ function DocumentViewerPage() {
                         <p className="muted-text">{keyword ? "No regions match your search." : "No text regions found on this page."}</p>
                     )}
 
-                    {filteredRegions.map((region) => {
+                    <section className="readable-text-view">
+                        {readableParagraphs.map((paragraph) => (
+                            <p key={paragraph.id} className="readable-paragraph">
+                                {paragraph.segments.map((segment) => {
+                                    const style = langStyle(segment.language);
+                                    const isActive = activeRegionId === segment.regionId;
+                                    return (
+                                        <span
+                                            key={segment.regionId}
+                                            ref={(element) => {
+                                                readableSegmentRefs.current[segment.regionId] = element;
+                                                regionRefs.current[segment.regionId] = element;
+                                            }}
+                                            className={isActive ? "readable-segment active" : "readable-segment"}
+                                            style={{
+                                                color: style.label,
+                                                background: isActive ? `${style.border}22` : "transparent",
+                                            }}
+                                            onClick={() => handleRegionClick(segment.regionId)}
+                                            title={`${(segment.language || "?").toUpperCase()} · ${Math.round((segment.confidence || 0) * 100)}% confidence`}
+                                        >
+                                            {renderHighlightedSegment(segment.text)}
+                                            {" "}
+                                        </span>
+                                    );
+                                })}
+                            </p>
+                        ))}
+                    </section>
+
+                    {activeRegionId && (() => {
+                        const region = regions.find((item) => item.id === activeRegionId);
+                        if (!region) {
+                            return null;
+                        }
+
                         const ls = langStyle(region.language);
-                        const isActive = activeRegionId === region.id;
-                        const text = getRegionDisplayText(region);
                         const isAnnotating = annotationRegionId === region.id;
                         const regionAnnotations = getRegionAnnotations(region.id);
 
                         return (
-                            <div
-                                key={region.id}
-                                ref={(el) => { regionRefs.current[region.id] = el; }}
-                                className="region-card"
-                                style={{
-                                    borderLeft: `3px solid ${ls.border}`,
-                                    background: isActive ? ls.bg.replace("0.18", "0.28") : "transparent",
-                                    transition: "background 0.15s",
-                                    cursor: "pointer",
-                                }}
-                                onClick={() => setActiveRegionId((p) => p === region.id ? null : region.id)}
-                            >
-                                {/* Region header */}
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                        <span style={{ fontSize: "0.72rem", fontWeight: 700, color: ls.label, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                                            {region.language || "?"}
-                                        </span>
-                                        <span className="muted-text" style={{ fontSize: "0.72rem" }}>
-                                            {Math.round(region.confidence * 100)}% confidence
-                                        </span>
-                                    </div>
-                                    <div style={{ display: "flex", gap: 4 }}>
+                            <section className="region-card" style={{ borderLeft: `3px solid ${ls.border}` }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                                    <span style={{ fontSize: "0.78rem", color: ls.label, fontWeight: 700 }}>
+                                        Region {region.reading_order + 1} · {(region.language || "?").toUpperCase()} · {Math.round(region.confidence * 100)}%
+                                    </span>
+                                    <div style={{ display: "flex", gap: 6 }}>
                                         <button
                                             className="btn-icon"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                navigator.clipboard.writeText(text);
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(getRegionDisplayText(region));
                                                 flash("Copied!");
                                             }}
-                                            title="Copy text"
-                                        >📋</button>
+                                            title="Copy region"
+                                        >
+                                            📋
+                                        </button>
                                         <button
                                             className="btn-icon"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setActiveRegionId(region.id);
+                                            onClick={() => {
                                                 const latest = regionAnnotations[0] || null;
-                                                setAnnotationRegionId((prev) => prev === region.id ? null : region.id);
+                                                setAnnotationRegionId((prev) => (prev === region.id ? null : region.id));
                                                 if (latest) {
                                                     setEditingAnnotationId(latest.id);
                                                     setAnnotationCategory(latest.category || "Note");
@@ -602,25 +790,14 @@ function DocumentViewerPage() {
                                                 }
                                             }}
                                             title="Annotate"
-                                        >✏️</button>
+                                        >
+                                            ✏️
+                                        </button>
                                     </div>
                                 </div>
 
-                                {/* Text content */}
-                                <p style={{
-                                    margin: 0,
-                                    fontSize: "0.9rem",
-                                    lineHeight: 1.65,
-                                    whiteSpace: "pre-wrap",
-                                    wordBreak: "break-word",
-                                    direction: region.language === "ur" ? "rtl" : "ltr",
-                                }}>
-                                    {highlightText(text)}
-                                </p>
-
-                                {/* Annotation display */}
-                                {!isAnnotating && regionAnnotations.length > 0 && (
-                                    <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+                                {regionAnnotations.length > 0 && !isAnnotating && (
+                                    <div style={{ marginBottom: 10, display: "flex", flexDirection: "column", gap: 6 }}>
                                         {regionAnnotations.slice(0, 2).map((annotation) => (
                                             <div key={annotation.id} style={{ borderLeft: "2px solid #ffd166", paddingLeft: 8 }}>
                                                 <p style={{ margin: 0, fontSize: "0.75rem", color: "#ffd166", fontWeight: 600 }}>
@@ -635,101 +812,102 @@ function DocumentViewerPage() {
                                     </div>
                                 )}
 
-                                {/* Region tags */}
                                 {region.tags && region.tags.length > 0 && (
-                                    <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 4 }}>
-                                        {region.tags.map((t) => (
-                                            <span key={t.id} className="tag-pill" style={{ fontSize: "0.72rem" }}>#{t.name}</span>
+                                    <div style={{ marginBottom: 10, display: "flex", flexWrap: "wrap", gap: 6 }}>
+                                        {region.tags.map((tag) => (
+                                            <span key={tag.id} className="tag-pill" style={{ fontSize: "0.75rem" }}>
+                                                #{tag.name}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRemoveRegionTag(region.id, tag.id)}
+                                                    style={{
+                                                        background: "none",
+                                                        border: "none",
+                                                        cursor: "pointer",
+                                                        color: "inherit",
+                                                        margin: 0,
+                                                        width: "auto",
+                                                        minWidth: 0,
+                                                        padding: "0 2px",
+                                                        fontSize: "0.75rem",
+                                                    }}
+                                                    title="Remove region tag"
+                                                >
+                                                    ✕
+                                                </button>
+                                            </span>
                                         ))}
                                     </div>
                                 )}
 
-                                {/* Quick annotation button when collapsed */}
-                                {!isActive && (
-                                    <button
-                                        type="button"
-                                        className="btn-sm"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setActiveRegionId(region.id);
-                                            setAnnotationRegionId(region.id);
-                                            setEditingAnnotationId(null);
-                                            setAnnotationCategory("Note");
-                                            setAnnotationNote("");
-                                            setAnnotationCustomTag("");
-                                        }}
-                                        style={{ marginTop: 8, width: "auto", padding: "4px 8px", fontSize: "0.75rem" }}
-                                    >
-                                        + Annotate
-                                    </button>
-                                )}
-
-                                {/* Expanded controls (when active) */}
-                                {isActive && (
-                                    <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 10, borderTop: `1px solid ${ls.border}44`, paddingTop: 10 }}>
-
-                                        {/* Annotation form */}
-                                        {isAnnotating && (
-                                            <form onSubmit={handleSaveAnnotation} style={{ display: "grid", gap: 6, marginBottom: 8 }}>
-                                                <select
-                                                    value={annotationCategory}
-                                                    onChange={(e) => setAnnotationCategory(e.target.value)}
-                                                    style={{ margin: 0, padding: "6px 8px", fontSize: "0.82rem" }}
+                                {isAnnotating && (
+                                    <form onSubmit={handleSaveAnnotation} style={{ display: "grid", gap: 6, marginBottom: 10 }}>
+                                        <select
+                                            value={annotationCategory}
+                                            onChange={(e) => setAnnotationCategory(e.target.value)}
+                                            style={{ margin: 0, padding: "6px 8px", fontSize: "0.82rem" }}
+                                        >
+                                            <option value="Signature">Signature</option>
+                                            <option value="Stamp">Stamp</option>
+                                            <option value="Name">Name</option>
+                                            <option value="Date">Date</option>
+                                            <option value="Amount">Amount</option>
+                                            <option value="Clause">Clause</option>
+                                            <option value="Note">Note</option>
+                                        </select>
+                                        <textarea
+                                            value={annotationNote}
+                                            onChange={(e) => setAnnotationNote(e.target.value)}
+                                            placeholder="Add note/comment…"
+                                            style={{ margin: 0, padding: "6px 8px", fontSize: "0.82rem", minHeight: 58 }}
+                                        />
+                                        <input
+                                            value={annotationCustomTag}
+                                            onChange={(e) => setAnnotationCustomTag(e.target.value)}
+                                            placeholder="Optional custom tag…"
+                                            style={{ margin: 0, padding: "6px 8px", fontSize: "0.82rem" }}
+                                        />
+                                        <div style={{ display: "flex", gap: 6 }}>
+                                            <button type="submit" style={{ margin: 0, width: "auto", padding: "5px 10px", fontSize: "0.82rem" }}>
+                                                {editingAnnotationId ? "Update" : "Save"}
+                                            </button>
+                                            {editingAnnotationId && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDeleteAnnotation(editingAnnotationId)}
+                                                    style={{ margin: 0, width: "auto", padding: "5px 10px", fontSize: "0.82rem", background: "rgba(240,82,82,0.18)", border: "1px solid #f0525266" }}
                                                 >
-                                                    <option value="Signature">Signature</option>
-                                                    <option value="Stamp">Stamp</option>
-                                                    <option value="Name">Name</option>
-                                                    <option value="Date">Date</option>
-                                                    <option value="Amount">Amount</option>
-                                                    <option value="Clause">Clause</option>
-                                                    <option value="Note">Note</option>
-                                                </select>
-                                                <textarea
-                                                    value={annotationNote}
-                                                    onChange={(e) => setAnnotationNote(e.target.value)}
-                                                    placeholder="Add note/comment…"
-                                                    style={{ margin: 0, padding: "6px 8px", fontSize: "0.82rem", minHeight: 58 }}
-                                                    autoFocus
-                                                />
-                                                <input
-                                                    value={annotationCustomTag}
-                                                    onChange={(e) => setAnnotationCustomTag(e.target.value)}
-                                                    placeholder="Optional custom tag…"
-                                                    style={{ margin: 0, padding: "6px 8px", fontSize: "0.82rem" }}
-                                                />
-                                                <div style={{ display: "flex", gap: 6 }}>
-                                                    <button type="submit" style={{ margin: 0, width: "auto", padding: "5px 10px", fontSize: "0.82rem" }}>
-                                                        {editingAnnotationId ? "Update" : "Save"}
-                                                    </button>
-                                                    {editingAnnotationId && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleDeleteAnnotation(editingAnnotationId)}
-                                                            style={{ margin: 0, width: "auto", padding: "5px 10px", fontSize: "0.82rem", background: "rgba(240,82,82,0.18)", border: "1px solid #f0525266" }}
-                                                        >
-                                                            Delete
-                                                        </button>
-                                                    )}
-                                                    <button type="button" onClick={() => { setAnnotationRegionId(null); setEditingAnnotationId(null); }} style={{ margin: 0, width: "auto", padding: "5px 10px", fontSize: "0.82rem", background: "transparent", border: "1px solid var(--border)", color: "var(--text-muted)" }}>Cancel</button>
-                                                </div>
-                                            </form>
-                                        )}
-
-                                        {/* Tag region */}
-                                        <form onSubmit={(e) => handleAddRegionTag(e, region.id)} style={{ display: "flex", gap: 6 }}>
-                                            <input
-                                                value={newRegionTag}
-                                                onChange={(e) => setNewRegionTag(e.target.value)}
-                                                placeholder="Tag this region…"
-                                                style={{ flex: 1, margin: 0, padding: "5px 8px", fontSize: "0.82rem" }}
-                                            />
-                                            <button type="submit" style={{ margin: 0, width: "auto", padding: "5px 10px", fontSize: "0.82rem" }}>+Tag</button>
-                                        </form>
-                                    </div>
+                                                    Delete
+                                                </button>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setAnnotationRegionId(null);
+                                                    setEditingAnnotationId(null);
+                                                }}
+                                                style={{ margin: 0, width: "auto", padding: "5px 10px", fontSize: "0.82rem", background: "transparent", border: "1px solid var(--border)", color: "var(--text-muted)" }}
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </form>
                                 )}
-                            </div>
+
+                                <form onSubmit={(e) => handleAddRegionTag(e, region.id)} style={{ display: "flex", gap: 6 }}>
+                                    <input
+                                        value={newRegionTag}
+                                        onChange={(e) => setNewRegionTag(e.target.value)}
+                                        placeholder="Tag this region…"
+                                        style={{ flex: 1, margin: 0, padding: "5px 8px", fontSize: "0.82rem" }}
+                                    />
+                                    <button type="submit" style={{ margin: 0, width: "auto", padding: "5px 10px", fontSize: "0.82rem" }}>
+                                        +Tag
+                                    </button>
+                                </form>
+                            </section>
                         );
-                    })}
+                    })()}
 
                     {/* Annotation side panel list */}
                     <section style={{ marginTop: 12, borderTop: "1px solid var(--border)", paddingTop: 12 }}>

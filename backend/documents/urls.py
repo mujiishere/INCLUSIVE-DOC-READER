@@ -15,6 +15,7 @@ from .views import (
     document_tags,
     export_document,
     region_add_tag,
+    region_remove_tag,
     region_annotation_detail,
     search_documents,
     upload_document,
@@ -44,6 +45,7 @@ urlpatterns = [
     # Regions
     path("regions/<int:region_id>/annotations/", create_region_annotation, name="region-annotations-create"),
     path("regions/<int:region_id>/tags/", region_add_tag, name="region-add-tag"),
+    path("regions/<int:region_id>/tags/<int:tag_id>/", region_remove_tag, name="region-remove-tag"),
     path("annotations/<int:annotation_id>/", region_annotation_detail, name="region-annotation-detail"),
 
     # Search

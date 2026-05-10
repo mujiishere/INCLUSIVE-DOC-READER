@@ -367,6 +367,19 @@ def region_add_tag(request, region_id):
     return Response(DocumentTagSerializer(tag).data, status=status.HTTP_201_CREATED)
 
 
+@api_view(["DELETE"])
+def region_remove_tag(request, region_id, tag_id):
+    """Remove an existing tag from one text region."""
+    try:
+        region = TextRegion.objects.get(pk=region_id, page__document__user=request.user)
+        tag = DocumentTag.objects.get(pk=tag_id, user=request.user)
+    except (TextRegion.DoesNotExist, DocumentTag.DoesNotExist):
+        return Response({"error": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    region.tags.remove(tag)
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 # ---------------------------------------------------------------------------
 # Search
 # ---------------------------------------------------------------------------
@@ -388,7 +401,10 @@ def search_documents(request):
     docs_qs = Document.objects.filter(user=request.user)
 
     if tag:
-        docs_qs = docs_qs.filter(tags__name__iexact=tag, tags__user=request.user).distinct()
+        docs_qs = docs_qs.filter(
+            Q(tags__name__iexact=tag, tags__user=request.user)
+            | Q(pages__regions__tags__name__iexact=tag, pages__regions__tags__user=request.user)
+        ).distinct()
 
     if not query and not lang:
         serializer = DocumentSerializer(
@@ -435,9 +451,11 @@ def search_documents(request):
         if lang:
             snippet_regions = snippet_regions.filter(language=lang)
 
+        match_regions = list(snippet_regions.select_related("page").order_by("page__page_number", "reading_order"))
+
         snippet = ""
         match_page = None
-        sr = snippet_regions.first()
+        sr = match_regions[0] if match_regions else None
         if sr:
             text = sr.corrected_text or sr.raw_text
             match_page = sr.page.page_number
@@ -458,6 +476,8 @@ def search_documents(request):
         doc_data = DocumentSerializer(doc, context={"request": request}).data
         doc_data["snippet"] = snippet
         doc_data["match_page"] = match_page
+        doc_data["total_matches"] = len(match_regions)
+        doc_data["match_pages"] = sorted({region.page.page_number for region in match_regions})
         results.append(doc_data)
 
     return Response({"results": results, "total": len(results)})

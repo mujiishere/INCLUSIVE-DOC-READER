@@ -361,6 +361,44 @@ a { color: inherit; }
 
 .region-card:hover { background: rgba(127,90,240,0.06); }
 
+.readable-text-view {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 4px 2px;
+}
+
+.readable-paragraph {
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.85;
+    white-space: pre-wrap;
+    word-break: break-word;
+    text-align: left;
+}
+
+.readable-segment {
+    cursor: pointer;
+    border-radius: 4px;
+    padding: 0 2px;
+    transition: background 0.15s ease;
+}
+
+.readable-segment:hover {
+    background: rgba(127, 90, 240, 0.2) !important;
+}
+
+.readable-segment.active {
+    outline: 1px solid rgba(255, 209, 102, 0.65);
+}
+
+.ocr-search-mark {
+    background: #ffd166;
+    color: #1b1b1b;
+    border-radius: 3px;
+    padding: 0 2px;
+}
+
 /* ── Pulse animation ─────────────────────────────────────────────────────── */
 
 @keyframes pulse {
