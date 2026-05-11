@@ -1,5 +1,15 @@
 // Full side-by-side document viewer with region highlighting, tagging, annotation, search, and export.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+    AlertTriangle,
+    ArrowDown,
+    ArrowLeft,
+    ArrowRight,
+    ArrowUp,
+    Clipboard,
+    PencilLine,
+    X,
+} from "lucide-react";
 import { Link, useLocation, useParams } from "react-router-dom";
 
 import StatusBadge from "../components/StatusBadge";
@@ -23,17 +33,17 @@ import {
 // ── Language colour map ────────────────────────────────────────────────────
 
 const LANG_COLORS = {
-    en: { bg: "rgba(40,199,240,0.18)",  border: "#28c7f0", label: "#28c7f0" },
-    hi: { bg: "rgba(255,153,51,0.18)",  border: "#ff9933", label: "#ff9933" },
-    ml: { bg: "rgba(127,90,240,0.18)",  border: "#7f5af0", label: "#c4a7ff" },
-    ta: { bg: "rgba(55,211,155,0.18)",  border: "#37d39b", label: "#37d39b" },
-    te: { bg: "rgba(240,82,82,0.18)",   border: "#f05252", label: "#f08080" },
-    kn: { bg: "rgba(255,214,0,0.15)",   border: "#ffd600", label: "#ffd600" },
-    ur: { bg: "rgba(240,163,40,0.18)",  border: "#f0a328", label: "#f0c870" },
+    en: { bg: "rgba(5,144,145,0.18)", border: "#059091", label: "#059091" },
+    hi: { bg: "rgba(115,139,109,0.18)", border: "#738B6D", label: "#738B6D" },
+    ml: { bg: "rgba(78,153,146,0.2)", border: "#4e9992", label: "#4e9992" },
+    ta: { bg: "rgba(141,154,109,0.2)", border: "#8d9a6d", label: "#8d9a6d" },
+    te: { bg: "rgba(191,95,74,0.18)", border: "#bf5f4a", label: "#bf5f4a" },
+    kn: { bg: "rgba(170,130,64,0.18)", border: "#aa8240", label: "#aa8240" },
+    ur: { bg: "rgba(107,145,126,0.2)", border: "#6b917e", label: "#6b917e" },
 };
 
 function langStyle(lang) {
-    return LANG_COLORS[lang] || { bg: "rgba(146,160,207,0.15)", border: "#92a0cf", label: "#92a0cf" };
+    return LANG_COLORS[lang] || { bg: "rgba(111,102,88,0.16)", border: "#6f6658", label: "#6f6658" };
 }
 
 const PROCESSING = new Set(["pending", "ocr_processing", "ai_correction"]);
@@ -451,7 +461,9 @@ function DocumentViewerPage() {
         return (
             <section>
                 <p className="error-msg">{errorMessage}</p>
-                <Link to="/search">← Back to Documents</Link>
+                <Link to="/search" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <ArrowLeft size={14} /> Back to Documents
+                </Link>
             </section>
         );
     }
@@ -485,8 +497,8 @@ function DocumentViewerPage() {
                     <button onClick={() => handleExport("json")} className="btn-sm" style={{ margin: 0, width: "auto", padding: "7px 14px" }}>
                         Export JSON
                     </button>
-                    <Link to="/search" style={{ display: "flex", alignItems: "center", gap: 4, fontSize: "0.88rem", color: "var(--text-muted)" }}>
-                        ← Back
+                    <Link to="/search" style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: "0.88rem", color: "var(--text-muted)" }}>
+                        <ArrowLeft size={14} /> Back
                     </Link>
                 </div>
             </header>
@@ -505,7 +517,10 @@ function DocumentViewerPage() {
 
             {document.status === "failed" && (
                 <div className="error-banner">
-                    ⚠ Processing failed: {document.error_message || "Unknown error."}
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                        <AlertTriangle size={16} />
+                        Processing failed: {document.error_message || "Unknown error."}
+                    </span>
                 </div>
             )}
 
@@ -523,7 +538,7 @@ function DocumentViewerPage() {
                                 onClick={() => handleRemoveDocTag(t.id)}
                                 style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", padding: "0 2px", margin: 0, width: "auto", fontSize: "0.8rem", minWidth: 0 }}
                                 title="Remove tag"
-                            >✕</button>
+                            ><X size={12} /></button>
                         </span>
                     ))}
                     <form onSubmit={handleAddDocTag} style={{ display: "flex", gap: 4, margin: 0 }}>
@@ -569,7 +584,7 @@ function DocumentViewerPage() {
                             style={{ margin: 0, width: "auto", padding: "7px 10px" }}
                             title="Previous match"
                         >
-                            ↑
+                            <ArrowUp size={14} />
                         </button>
                         <span className="muted-text" style={{ fontSize: "0.82rem", minWidth: 90, textAlign: "center" }}>
                             {matchedRegionIds.length ? `${matchIndex + 1} of ${matchedRegionIds.length}` : "0 matches"}
@@ -581,7 +596,7 @@ function DocumentViewerPage() {
                             style={{ margin: 0, width: "auto", padding: "7px 10px" }}
                             title="Next match"
                         >
-                            ↓
+                            <ArrowDown size={14} />
                         </button>
                     </div>
                 )}
@@ -593,7 +608,7 @@ function DocumentViewerPage() {
                             onClick={() => changePage(currentPage - 1)}
                             disabled={currentPage <= 1}
                             className="btn-sm" style={{ margin: 0, width: "auto", padding: "7px 12px" }}
-                        >←</button>
+                        ><ArrowLeft size={14} /></button>
                         <span className="muted-text" style={{ fontSize: "0.88rem", whiteSpace: "nowrap" }}>
                             Page {currentPage} of {document.page_count}
                         </span>
@@ -601,7 +616,7 @@ function DocumentViewerPage() {
                             onClick={() => changePage(currentPage + 1)}
                             disabled={currentPage >= document.page_count}
                             className="btn-sm" style={{ margin: 0, width: "auto", padding: "7px 12px" }}
-                        >→</button>
+                        ><ArrowRight size={14} /></button>
                     </div>
                 )}
             </div>
@@ -650,13 +665,13 @@ function DocumentViewerPage() {
                                             top: bbox.top,
                                             width: bbox.width,
                                             height: bbox.height,
-                                            border: `2px solid ${isMatch ? "#ffde7a" : hasAnnotations ? "#ffd166" : ls.border}`,
+                                            border: `2px solid ${isMatch ? "var(--accent-alt)" : hasAnnotations ? "var(--accent)" : ls.border}`,
                                             background: isActive
                                                 ? ls.bg.replace("0.18", "0.38")
                                                 : isMatch
-                                                    ? "rgba(255, 222, 122, 0.18)"
+                                                    ? "color-mix(in srgb, var(--accent-alt) 30%, transparent 70%)"
                                                     : ls.bg,
-                                            boxShadow: isActive ? `0 0 0 3px ${hasAnnotations ? "#ffd16666" : `${ls.border}66`}` : "none",
+                                            boxShadow: isActive ? `0 0 0 3px ${hasAnnotations ? "color-mix(in srgb, var(--accent-alt) 45%, transparent 55%)" : `${ls.border}66`}` : "none",
                                             cursor: "pointer",
                                             transition: "background 0.15s, box-shadow 0.15s",
                                             boxSizing: "border-box",
@@ -668,8 +683,8 @@ function DocumentViewerPage() {
                                                     position: "absolute",
                                                     top: -10,
                                                     right: -10,
-                                                    background: isMatch ? "#ffde7a" : "#ffd166",
-                                                    color: "#1d1d1d",
+                                                    background: isMatch ? "color-mix(in srgb, var(--accent-alt) 32%, #fffaf0 68%)" : "color-mix(in srgb, var(--accent) 32%, #fffaf0 68%)",
+                                                    color: "var(--text-inverse)",
                                                     borderRadius: 999,
                                                     fontSize: "0.65rem",
                                                     padding: "1px 6px",
@@ -770,7 +785,7 @@ function DocumentViewerPage() {
                                             }}
                                             title="Copy region"
                                         >
-                                            📋
+                                            <Clipboard size={14} />
                                         </button>
                                         <button
                                             className="btn-icon"
@@ -791,7 +806,7 @@ function DocumentViewerPage() {
                                             }}
                                             title="Annotate"
                                         >
-                                            ✏️
+                                            <PencilLine size={14} />
                                         </button>
                                     </div>
                                 </div>
@@ -799,12 +814,12 @@ function DocumentViewerPage() {
                                 {regionAnnotations.length > 0 && !isAnnotating && (
                                     <div style={{ marginBottom: 10, display: "flex", flexDirection: "column", gap: 6 }}>
                                         {regionAnnotations.slice(0, 2).map((annotation) => (
-                                            <div key={annotation.id} style={{ borderLeft: "2px solid #ffd166", paddingLeft: 8 }}>
-                                                <p style={{ margin: 0, fontSize: "0.75rem", color: "#ffd166", fontWeight: 600 }}>
+                                            <div key={annotation.id} style={{ borderLeft: "2px solid var(--accent-alt)", paddingLeft: 8 }}>
+                                                <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--accent-alt)", fontWeight: 600 }}>
                                                     {annotation.category}
                                                     {annotation.custom_tag?.name ? ` · #${annotation.custom_tag.name}` : ""}
                                                 </p>
-                                                <p style={{ margin: "3px 0 0", fontSize: "0.8rem", color: "#f0e6c0" }}>
+                                                <p style={{ margin: "3px 0 0", fontSize: "0.8rem", color: "var(--text-main)" }}>
                                                     {annotation.note || "No note"}
                                                 </p>
                                             </div>
@@ -833,7 +848,7 @@ function DocumentViewerPage() {
                                                     }}
                                                     title="Remove region tag"
                                                 >
-                                                    ✕
+                                                    <X size={12} />
                                                 </button>
                                             </span>
                                         ))}
@@ -875,7 +890,7 @@ function DocumentViewerPage() {
                                                 <button
                                                     type="button"
                                                     onClick={() => handleDeleteAnnotation(editingAnnotationId)}
-                                                    style={{ margin: 0, width: "auto", padding: "5px 10px", fontSize: "0.82rem", background: "rgba(240,82,82,0.18)", border: "1px solid #f0525266" }}
+                                                    style={{ margin: 0, width: "auto", padding: "5px 10px", fontSize: "0.82rem", background: "var(--danger-soft)", border: "1px solid var(--danger-border)", color: "var(--danger-text)" }}
                                                 >
                                                     Delete
                                                 </button>
@@ -919,7 +934,7 @@ function DocumentViewerPage() {
                             <article
                                 key={annotation.id}
                                 className="region-card"
-                                style={{ borderLeft: "3px solid #ffd166", marginTop: 8, cursor: "pointer" }}
+                                style={{ borderLeft: "3px solid var(--accent-alt)", marginTop: 8, cursor: "pointer" }}
                                 onClick={() => {
                                     setActiveRegionId(annotation.region);
                                     setAnnotationRegionId(annotation.region);
@@ -932,7 +947,7 @@ function DocumentViewerPage() {
                                     }, 50);
                                 }}
                             >
-                                <p style={{ margin: 0, fontSize: "0.76rem", color: "#ffd166", fontWeight: 700 }}>
+                                <p style={{ margin: 0, fontSize: "0.76rem", color: "var(--accent-alt)", fontWeight: 700 }}>
                                     {annotation.category}
                                     {annotation.custom_tag?.name ? ` · #${annotation.custom_tag.name}` : ""}
                                 </p>

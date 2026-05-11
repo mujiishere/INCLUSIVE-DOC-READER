@@ -1,6 +1,7 @@
 // Upload page with file drag-drop, progress bar, and immediate status redirect.
 import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { CloudUpload, FileText, X } from "lucide-react";
 
 import { getApiErrorMessage } from "../services/api";
 import { uploadDocument } from "../services/documentService";
@@ -61,13 +62,13 @@ function UploadPage() {
     const acceptedFormats = ".pdf, .png, .jpg, .jpeg, .tiff, .tif, .bmp, .webp";
 
     return (
-        <section>
-            <header className="page-header">
-                <h2>Upload Document</h2>
-                <p>Upload scanned PDFs or images — multilingual OCR runs automatically.</p>
-            </header>
+        <section className="upload-page">
+            <section className="glass-card upload-panel">
+                <header className="page-header" style={{ marginBottom: 16 }}>
+                    <h2>Upload Document</h2>
+                    <p>Upload scanned PDFs or images - multilingual OCR runs automatically.</p>
+                </header>
 
-            <section className="glass-card" style={{ marginTop: 20, maxWidth: 640 }}>
                 <form onSubmit={handleSubmit}>
                     {/* Drag-drop zone */}
                     <div
@@ -90,7 +91,7 @@ function UploadPage() {
                         />
                         {selectedFile ? (
                             <div className="upload-file-info">
-                                <span className="upload-icon">📄</span>
+                                <FileText className="upload-icon" size={34} />
                                 <div>
                                     <p style={{ margin: 0, fontWeight: 600 }}>{selectedFile.name}</p>
                                     <p className="muted-text" style={{ margin: 0 }}>
@@ -102,11 +103,11 @@ function UploadPage() {
                                     className="btn-icon"
                                     onClick={(e) => { e.stopPropagation(); setSelectedFile(null); setTitle(""); }}
                                     title="Remove file"
-                                >✕</button>
+                                ><X size={14} /></button>
                             </div>
                         ) : (
                             <div className="upload-placeholder">
-                                <span className="upload-icon">☁️</span>
+                                <CloudUpload className="upload-icon" size={36} />
                                 <p style={{ margin: "8px 0 4px", fontWeight: 600 }}>
                                     Drag &amp; drop or click to select
                                 </p>
@@ -152,9 +153,6 @@ function UploadPage() {
                         {isSubmitting ? "Uploading…" : "Upload & Process"}
                     </button>
                 </form>
-            </section>
-
-            <section className="glass-card" style={{ marginTop: 16, maxWidth: 640 }}>
                 <h3 style={{ margin: "0 0 10px" }}>Supported Languages</h3>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                     {[

@@ -1,6 +1,15 @@
 // Dashboard — live stats with status breakdown and recent documents.
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import {
+    ArrowRight,
+    CheckCircle2,
+    Clock3,
+    FileText,
+    FolderOpen,
+    Upload,
+    XCircle,
+} from "lucide-react";
 
 import StatusBadge from "../components/StatusBadge";
 import { getApiErrorMessage } from "../services/api";
@@ -28,14 +37,14 @@ function DashboardPage() {
     }
 
     const statCards = stats ? [
-        { label: "Total Documents", value: stats.total_documents, icon: "📁" },
-        { label: "Completed",       value: stats.processed_files,  icon: "✅" },
-        { label: "Processing",      value: stats.pending_uploads,  icon: "⚙️" },
-        { label: "Failed",          value: stats.failed_documents, icon: "❌" },
+        { label: "Total Documents", value: stats.total_documents, icon: FileText },
+        { label: "Completed", value: stats.processed_files, icon: CheckCircle2 },
+        { label: "Processing", value: stats.pending_uploads, icon: Clock3 },
+        { label: "Failed", value: stats.failed_documents, icon: XCircle },
     ] : [];
 
     return (
-        <section>
+        <section className="dashboard-page">
             <header className="page-header">
                 <h2>Dashboard</h2>
                 <p>Welcome back — here is your document processing overview.</p>
@@ -51,7 +60,7 @@ function DashboardPage() {
                     ))
                     : statCards.map((item) => (
                         <article key={item.label} className="glass-card stat-card">
-                            <span style={{ fontSize: "1.6rem" }}>{item.icon}</span>
+                            <item.icon size={26} />
                             <h3 style={{ margin: "6px 0 0", fontSize: "2.2rem" }}>{item.value}</h3>
                             <p style={{ margin: 0, color: "var(--text-muted)", fontSize: "0.88rem" }}>{item.label}</p>
                         </article>
@@ -62,12 +71,12 @@ function DashboardPage() {
             {/* Quick actions */}
             <div className="action-grid" style={{ marginTop: 16 }}>
                 {[
-                    { to: "/upload", title: "Upload Document", icon: "⬆️", text: "Upload PDFs or scanned images for multilingual OCR." },
-                    { to: "/search", title: "Browse Documents", icon: "📂", text: "View, search, and manage all your processed documents." },
+                    { to: "/upload", title: "Upload Document", icon: Upload, text: "Upload PDFs or scanned images for multilingual OCR." },
+                    { to: "/search", title: "Browse Documents", icon: FolderOpen, text: "View, search, and manage all your processed documents." },
                 ].map((a) => (
                     <Link key={a.to} to={a.to} style={{ textDecoration: "none" }}>
                         <article className="glass-card action-card">
-                            <span style={{ fontSize: "1.8rem" }}>{a.icon}</span>
+                            <a.icon size={30} />
                             <h3 style={{ margin: "8px 0 4px" }}>{a.title}</h3>
                             <p className="muted-text" style={{ margin: 0, fontSize: "0.88rem" }}>{a.text}</p>
                         </article>
@@ -76,10 +85,12 @@ function DashboardPage() {
             </div>
 
             {/* Recent documents */}
-            <section className="glass-card" style={{ marginTop: 16 }}>
+            <section className="glass-card recent-documents-panel" style={{ marginTop: 16 }}>
                 <div className="section-row">
                     <h3 style={{ margin: 0 }}>Recent Documents</h3>
-                    <Link to="/search" style={{ fontSize: "0.88rem", color: "var(--accent-alt)" }}>View all →</Link>
+                    <Link to="/search" style={{ fontSize: "0.88rem", color: "var(--accent-alt)", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        View all <ArrowRight size={14} />
+                    </Link>
                 </div>
 
                 {isLoading && <p className="muted-text">Loading…</p>}
@@ -101,8 +112,8 @@ function DashboardPage() {
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                             <StatusBadge status={doc.status} />
-                            <Link to={`/documents/${doc.id}`} style={{ fontSize: "0.82rem", color: "var(--accent-alt)", whiteSpace: "nowrap" }}>
-                                View →
+                            <Link to={`/documents/${doc.id}`} style={{ fontSize: "0.82rem", color: "var(--accent-alt)", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                                View <ArrowRight size={14} />
                             </Link>
                         </div>
                     </div>

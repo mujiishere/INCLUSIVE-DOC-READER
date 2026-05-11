@@ -1,6 +1,7 @@
 // Document list page with status badges, language filter, delete, and search.
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import { Loader2, RefreshCw, Search, Trash2 } from "lucide-react";
 
 import StatusBadge from "../components/StatusBadge";
 import { getApiErrorMessage } from "../services/api";
@@ -27,10 +28,11 @@ const LANG_OPTIONS = [
 const PROCESSING_STATUSES = new Set(["pending", "ocr_processing", "ai_correction"]);
 
 function DocumentListPage() {
+    const [searchParams, setSearchParams] = useSearchParams();
     const [documents, setDocuments] = useState([]);
-    const [query, setQuery] = useState("");
-    const [langFilter, setLangFilter] = useState("");
-    const [tagFilter, setTagFilter] = useState("");
+    const [query, setQuery] = useState(searchParams.get("q") || "");
+    const [langFilter, setLangFilter] = useState(searchParams.get("lang") || "");
+    const [tagFilter, setTagFilter] = useState(searchParams.get("tag") || "");
     const [snippets, setSnippets] = useState({});
     const [errorMessage, setErrorMessage] = useState("");
     const [isLoading, setIsLoading] = useState(false);
@@ -38,9 +40,22 @@ function DocumentListPage() {
     const pollRef = useRef(null);
 
     useEffect(() => {
-        loadDocuments();
+        const q = searchParams.get("q") || "";
+        const lang = searchParams.get("lang") || "";
+        const tag = searchParams.get("tag") || "";
+
+        setQuery(q);
+        setLangFilter(lang);
+        setTagFilter(tag);
+
+        if (q || lang || tag) {
+            runSearch(q, lang, tag);
+        } else {
+            loadDocuments("");
+        }
+
         return () => clearInterval(pollRef.current);
-    }, []);
+    }, [searchParams]);
 
     // Poll status for any in-progress documents every 4 seconds
     useEffect(() => {
@@ -65,14 +80,15 @@ function DocumentListPage() {
         return () => clearInterval(pollRef.current);
     }, [documents]);
 
-    async function loadDocuments() {
+    async function loadDocuments(activeTag = tagFilter) {
         setIsLoading(true);
         setErrorMessage("");
         try {
-            const data = tagFilter
-                ? await getDocumentsWithFilters({ tag: tagFilter })
+            const data = activeTag
+                ? await getDocumentsWithFilters({ tag: activeTag })
                 : await getDocuments();
             setDocuments(Array.isArray(data) ? data : data.results || []);
+            setSnippets({});
         } catch (err) {
             setErrorMessage(getApiErrorMessage(err));
         } finally {
@@ -80,11 +96,11 @@ function DocumentListPage() {
         }
     }
 
-    async function handleSearch() {
+    async function runSearch(activeQuery = query, activeLang = langFilter, activeTag = tagFilter) {
         setIsLoading(true);
         setErrorMessage("");
         try {
-            const data = await searchDocuments(query, langFilter, tagFilter);
+            const data = await searchDocuments(activeQuery, activeLang, activeTag);
             const results = data.results || [];
             setDocuments(results);
             const sm = {};
@@ -95,6 +111,14 @@ function DocumentListPage() {
         } finally {
             setIsLoading(false);
         }
+    }
+
+    function handleSearch() {
+        const params = new URLSearchParams();
+        if (query.trim()) params.set("q", query.trim());
+        if (langFilter) params.set("lang", langFilter);
+        if (tagFilter.trim()) params.set("tag", tagFilter.trim());
+        setSearchParams(params);
     }
 
     function handleKeyDown(e) {
@@ -150,8 +174,8 @@ function DocumentListPage() {
                 <button onClick={handleSearch} className="btn-search" style={{ margin: 0, width: "auto", padding: "10px 20px" }}>
                     Search
                 </button>
-                <button onClick={loadDocuments} className="btn-ghost" style={{ margin: 0, width: "auto", padding: "10px 14px" }} title="Refresh">
-                    ↺
+                <button onClick={() => loadDocuments()} className="btn-ghost" style={{ margin: 0, width: "auto", padding: "10px 14px" }} title="Refresh">
+                    <RefreshCw size={16} />
                 </button>
             </div>
 
@@ -160,7 +184,7 @@ function DocumentListPage() {
 
             {!isLoading && documents.length === 0 && (
                 <div className="glass-card empty-state" style={{ marginTop: 20 }}>
-                    <p style={{ fontSize: "2rem", margin: 0 }}>📭</p>
+                    <Search size={34} style={{ color: "var(--text-muted)" }} />
                     <p style={{ marginTop: 8 }}>No documents found. <Link to="/upload">Upload one now.</Link></p>
                 </div>
             )}
@@ -221,7 +245,7 @@ function DocumentListPage() {
                                 style={{ width: "auto", padding: "8px 14px", margin: 0 }}
                                 title="Delete document"
                             >
-                                {deletingId === doc.id ? "…" : "🗑"}
+                                {deletingId === doc.id ? <Loader2 size={16} className="spin-icon" /> : <Trash2 size={16} />}
                             </button>
                         </div>
                     </article>
