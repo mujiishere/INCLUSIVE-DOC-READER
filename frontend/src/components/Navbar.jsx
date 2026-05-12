@@ -49,48 +49,6 @@ function Navbar() {
         navigate("/login");
     }
 
-    const menuItems = isAdmin
-        ? [
-            { to: "/admin", label: "Admin" },
-            { to: "/users", label: "Users" },
-        ]
-        : [];
-
-    function goToSearch() {
-        if (isAdmin) {
-            return;
-        }
-        if (location.pathname !== "/search") {
-            navigate(buildSearchUrl(headerQuery));
-        }
-    }
-
-    function goToUpload() {
-        if (!isAdmin && location.pathname !== "/upload") {
-            navigate("/upload");
-        }
-    }
-
-    function buildSearchUrl(queryValue) {
-        const params = new URLSearchParams(location.pathname === "/search" ? location.search : "");
-        const trimmed = queryValue.trim();
-        if (trimmed) {
-            params.set("q", trimmed);
-        } else {
-            params.delete("q");
-        }
-        const qs = params.toString();
-        return qs ? `/search?${qs}` : "/search";
-    }
-
-    function handleSearchSubmit(e) {
-        e.preventDefault();
-        if (isAdmin) {
-            return;
-        }
-        navigate(buildSearchUrl(headerQuery));
-    }
-
     useEffect(() => {
         const params = new URLSearchParams(location.search);
         setHeaderQuery(params.get("q") || "");
@@ -123,36 +81,22 @@ function Navbar() {
                 </span>
             </button>
 
-            <div className="header-center">
-                <form className="header-search-trigger" onSubmit={handleSearchSubmit}>
-                    <Search className="header-search-icon" size={16} />
-                    <input
-                        type="text"
-                        className="header-search-input"
-                        placeholder={isAdmin ? "Search unavailable" : "Search documents"}
-                        value={headerQuery}
-                        onChange={(e) => setHeaderQuery(e.target.value)}
-                        onFocus={goToSearch}
-                        disabled={isAdmin}
-                    />
-                </form>
-                {!isAdmin && (
-                    <button
-                        type="button"
-                        className="header-upload-btn"
-                        onClick={goToUpload}
-                    >
-                        Upload
-                    </button>
+            <div className="header-center" style={{ gap: "20px" }}>
+                {!isAdmin ? (
+                    <>
+                        <Link to="/upload" className="header-link" style={{ fontSize: "1rem", fontWeight: 600 }}>Upload</Link>
+                        <Link to="/search" className="header-link" style={{ fontSize: "1rem", fontWeight: 600 }}>View Documents</Link>
+                        <Link to="/search" className="header-link" style={{ fontSize: "1rem", fontWeight: 600 }}>Search</Link>
+                    </>
+                ) : (
+                    <>
+                        <Link to="/admin" className="header-link" style={{ fontSize: "1rem", fontWeight: 600 }}>Dashboard</Link>
+                        <Link to="/users" className="header-link" style={{ fontSize: "1rem", fontWeight: 600 }}>Users</Link>
+                    </>
                 )}
             </div>
 
             <div className="header-actions">
-                {menuItems.map((item) => (
-                    <Link key={item.to} to={item.to} className="header-link">
-                        {item.label}
-                    </Link>
-                ))}
                 <button
                     type="button"
                     className="header-theme-btn"

@@ -29,15 +29,22 @@ function AdminLoginPage() {
     }
 
     return (
-        <section className="auth-page">
-            <div className="card auth-card">
-                <h2>Admin Login</h2>
-                <p className="muted-text">Sign in with admin account to access admin dashboard.</p>
-                <form onSubmit={handleSubmit}>
+        <section className="auth-page" style={{ background: "var(--surface-soft)" }}>
+            <div className="card auth-card" style={{ padding: "40px", boxShadow: "0 10px 30px rgba(0,0,0,0.05)", borderRadius: "20px", border: "none" }}>
+                <div style={{ textAlign: "center", marginBottom: "30px" }}>
+                    <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "50px", height: "50px", borderRadius: "14px", background: "linear-gradient(145deg, var(--secondary), #000)", color: "white", fontSize: "1.5rem", fontWeight: "bold", marginBottom: "16px" }}>
+                        A
+                    </div>
+                    <h2 style={{ fontSize: "1.8rem", margin: "0 0 8px" }}>Admin Portal</h2>
+                    <p className="muted-text" style={{ margin: 0 }}>Sign in with admin account to access the dashboard.</p>
+                </div>
+
+                <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                     <input
                         placeholder="Admin Username"
                         value={formData.username}
                         onChange={(event) => setFormData({ ...formData, username: event.target.value })}
+                        style={{ padding: "12px 16px" }}
                     />
 
                     <input
@@ -45,15 +52,20 @@ function AdminLoginPage() {
                         placeholder="Password"
                         value={formData.password}
                         onChange={(event) => setFormData({ ...formData, password: event.target.value })}
+                        style={{ padding: "12px 16px" }}
                     />
 
-                    <button type="submit">Admin Login</button>
-                    {errorMessage && <p>{errorMessage}</p>}
-                    {isSubmitting && <p>Signing in...</p>}
+                    <button type="submit" style={{ padding: "12px", background: "linear-gradient(90deg, #333, #000)" }}>Admin Login</button>
                 </form>
-                <p className="muted-text" style={{ marginTop: 8 }}>
-                    Normal user? <Link to="/login">Go to User Login</Link>
-                </p>
+
+                {errorMessage && <p className="error-msg" style={{ marginTop: "16px" }}>{errorMessage}</p>}
+                {isSubmitting && <p style={{ textAlign: "center" }}>Signing in...</p>}
+
+                <div style={{ textAlign: "center", marginTop: "24px", paddingTop: "24px", borderTop: "1px solid var(--border)" }}>
+                    <p className="muted-text" style={{ margin: 0 }}>
+                        Normal user? <Link to="/login" style={{ color: "var(--primary)", fontWeight: "600", textDecoration: "none" }}>Go to User Login</Link>
+                    </p>
+                </div>
             </div>
         </section>
     );

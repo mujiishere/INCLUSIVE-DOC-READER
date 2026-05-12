@@ -45,22 +45,40 @@ function DashboardPage() {
 
     return (
         <section className="dashboard-page">
-            <header className="page-header">
-                <h2>Dashboard</h2>
-                <p>Welcome back — here is your document processing overview.</p>
-            </header>
+            <div className="hero-section">
+                <h1>Every tool you need for scanned documents</h1>
+                <p>Upload, recognize, correct, and search multilingual scanned documents in one place.</p>
+                <div className="features-grid">
+                    {[
+                        { to: "/upload", title: "Upload & Extract", icon: Upload, text: "Upload PDFs or images and instantly extract text with multilingual OCR." },
+                        { to: "/search", title: "Search & View", icon: FolderOpen, text: "Browse processed documents, search text, and view annotations." },
+                    ].map((a) => (
+                        <Link key={a.to} to={a.to} style={{ textDecoration: "none", color: "inherit" }}>
+                            <article className="feature-card">
+                                <a.icon size={48} strokeWidth={1.5} />
+                                <h3>{a.title}</h3>
+                                <p>{a.text}</p>
+                            </article>
+                        </Link>
+                    ))}
+                </div>
+            </div>
 
-            {errorMessage && <p className="error-msg" style={{ marginTop: 16 }}>{errorMessage}</p>}
+            {errorMessage && <p className="error-msg" style={{ marginBottom: 16 }}>{errorMessage}</p>}
+
+            <div className="section-row" style={{ marginTop: 20 }}>
+                <h2 style={{ margin: 0, fontSize: "1.5rem" }}>Dashboard Statistics</h2>
+            </div>
 
             {/* Stat cards */}
-            <div className="stats-grid" style={{ marginTop: 22 }}>
+            <div className="stats-grid">
                 {isLoading
                     ? [1, 2, 3, 4].map((i) => (
                         <article key={i} className="glass-card stat-card skeleton" />
                     ))
                     : statCards.map((item) => (
                         <article key={item.label} className="glass-card stat-card">
-                            <item.icon size={26} />
+                            <item.icon size={26} color="var(--primary)" />
                             <h3 style={{ margin: "6px 0 0", fontSize: "2.2rem" }}>{item.value}</h3>
                             <p style={{ margin: 0, color: "var(--text-muted)", fontSize: "0.88rem" }}>{item.label}</p>
                         </article>
@@ -68,24 +86,8 @@ function DashboardPage() {
                 }
             </div>
 
-            {/* Quick actions */}
-            <div className="action-grid" style={{ marginTop: 16 }}>
-                {[
-                    { to: "/upload", title: "Upload Document", icon: Upload, text: "Upload PDFs or scanned images for multilingual OCR." },
-                    { to: "/search", title: "Browse Documents", icon: FolderOpen, text: "View, search, and manage all your processed documents." },
-                ].map((a) => (
-                    <Link key={a.to} to={a.to} style={{ textDecoration: "none" }}>
-                        <article className="glass-card action-card">
-                            <a.icon size={30} />
-                            <h3 style={{ margin: "8px 0 4px" }}>{a.title}</h3>
-                            <p className="muted-text" style={{ margin: 0, fontSize: "0.88rem" }}>{a.text}</p>
-                        </article>
-                    </Link>
-                ))}
-            </div>
-
             {/* Recent documents */}
-            <section className="glass-card recent-documents-panel" style={{ marginTop: 16 }}>
+            <section className="glass-card recent-documents-panel" style={{ marginTop: 32 }}>
                 <div className="section-row">
                     <h3 style={{ margin: 0 }}>Recent Documents</h3>
                     <Link to="/search" style={{ fontSize: "0.88rem", color: "var(--accent-alt)", display: "inline-flex", alignItems: "center", gap: 4 }}>
@@ -96,7 +98,7 @@ function DashboardPage() {
                 {isLoading && <p className="muted-text">Loading…</p>}
 
                 {!isLoading && (!stats?.recent_documents || stats.recent_documents.length === 0) && (
-                    <p className="muted-text">No documents yet. <Link to="/upload">Upload your first document.</Link></p>
+                    <p className="muted-text">No documents yet. <Link to="/upload" style={{color: "var(--primary)"}}>Upload your first document.</Link></p>
                 )}
 
                 {(stats?.recent_documents || []).map((doc) => (
@@ -112,8 +114,8 @@ function DashboardPage() {
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                             <StatusBadge status={doc.status} />
-                            <Link to={`/documents/${doc.id}`} style={{ fontSize: "0.82rem", color: "var(--accent-alt)", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 4 }}>
-                                View <ArrowRight size={14} />
+                            <Link to={`/documents/${doc.id}`} className="btn-link-primary" style={{ padding: "6px 12px", fontSize: "0.82rem" }}>
+                                View
                             </Link>
                         </div>
                     </div>

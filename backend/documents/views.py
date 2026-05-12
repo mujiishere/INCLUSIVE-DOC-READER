@@ -614,7 +614,7 @@ def export_document(request, pk):
         lines.append(f"=== Page {page.page_number} ===\n")
         for region in page.regions.all():
             text = region.corrected_text or region.raw_text
-            if text.strip():
+            if text and text.strip():
                 lines.append(text.strip())
                 lines.append("")
     content = "\n".join(lines)

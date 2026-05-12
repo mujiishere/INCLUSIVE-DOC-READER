@@ -112,10 +112,10 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "")
 
-# 'groq' | 'openai' | 'none'
-AI_CORRECTION_BACKEND = os.getenv("AI_CORRECTION_BACKEND", "groq")
-# Groq default: llama-3.1-8b-instant  (fast + free tier)
-AI_CORRECTION_MODEL = os.getenv("AI_CORRECTION_MODEL", "llama-3.1-8b-instant")
+# 'groq' | 'openai' | 'ollama' | 'none'
+AI_CORRECTION_BACKEND = os.getenv("AI_CORRECTION_BACKEND", "ollama")
+# Ollama default: llama3:8b
+AI_CORRECTION_MODEL = os.getenv("AI_CORRECTION_MODEL", "llama3:8b")
 
 # ── Misc ─────────────────────────────────────────────────────────────────────
 AUTH_PASSWORD_VALIDATORS = []

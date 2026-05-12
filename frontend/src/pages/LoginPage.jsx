@@ -24,7 +24,7 @@ function LoginPage() {
         try {
             const data = await loginNormalUser(formData);
             saveToken(data.token);
-            navigate("/documents");
+            navigate("/dashboard");
         } catch (error) {
             setErrorMessage(getApiErrorMessage(error));
         } finally {
@@ -52,16 +52,23 @@ function LoginPage() {
     }
 
     return (
-        <section className="auth-page">
-            <div className="card auth-card">
-                <h2>User Login</h2>
-                <p className="muted-text">Sign in as a normal user to upload and annotate documents.</p>
+        <section className="auth-page" style={{ background: "var(--surface-soft)" }}>
+            <div className="card auth-card" style={{ padding: "40px", boxShadow: "0 10px 30px rgba(0,0,0,0.05)", borderRadius: "20px", border: "none" }}>
+                <div style={{ textAlign: "center", marginBottom: "30px" }}>
+                    <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "50px", height: "50px", borderRadius: "14px", background: "linear-gradient(145deg, var(--primary), var(--secondary))", color: "white", fontSize: "1.5rem", fontWeight: "bold", marginBottom: "16px" }}>
+                        D
+                    </div>
+                    <h2 style={{ fontSize: "1.8rem", margin: "0 0 8px" }}>{showRegister ? "Create Account" : "Welcome Back"}</h2>
+                    <p className="muted-text" style={{ margin: 0 }}>{showRegister ? "Sign up to start extracting your documents." : "Sign in to continue to DocuOrbit."}</p>
+                </div>
+                
                 {!showRegister && (
-                    <form onSubmit={handleSubmit}>
+                    <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                         <input
                             placeholder="Username"
                             value={formData.username}
                             onChange={(event) => setFormData({ ...formData, username: event.target.value })}
+                            style={{ padding: "12px 16px" }}
                         />
 
                         <input
@@ -101,22 +108,24 @@ function LoginPage() {
                     </form>
                 )}
 
-                {errorMessage && <p className="error-msg">{errorMessage}</p>}
-                {successMessage && <p className="success-msg">{successMessage}</p>}
-                {isSubmitting && <p>Please wait...</p>}
+                {errorMessage && <p className="error-msg" style={{ marginTop: "16px" }}>{errorMessage}</p>}
+                {successMessage && <p className="success-msg" style={{ marginTop: "16px" }}>{successMessage}</p>}
+                {isSubmitting && <p style={{ textAlign: "center" }}>Please wait...</p>}
 
-                <button
-                    type="button"
-                    className="btn-sm"
-                    onClick={() => {
-                        setShowRegister((prev) => !prev);
-                        setErrorMessage("");
-                        setSuccessMessage("");
-                    }}
-                    style={{ marginTop: 8 }}
-                >
-                    {showRegister ? "Back to Login" : "New user? Register here"}
-                </button>
+                <div style={{ textAlign: "center", marginTop: "24px", paddingTop: "24px", borderTop: "1px solid var(--border)" }}>
+                    <button
+                        type="button"
+                        className="btn-ghost"
+                        onClick={() => {
+                            setShowRegister((prev) => !prev);
+                            setErrorMessage("");
+                            setSuccessMessage("");
+                        }}
+                        style={{ fontSize: "0.9rem", padding: "8px" }}
+                    >
+                        {showRegister ? "Already have an account? Log in" : "New user? Create an account"}
+                    </button>
+                </div>
 
                 <p className="muted-text" style={{ marginTop: 8 }}>
                     Admin account? <Link to="/admin-login">Go to Admin Login</Link>
