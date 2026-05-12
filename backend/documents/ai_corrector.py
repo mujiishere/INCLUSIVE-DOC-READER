@@ -5,7 +5,8 @@ Sends raw OCR text from a page to an LLM to fix OCR errors, typos,
 hallucinated characters, and improve readability while preserving meaning.
 
 Supported backends (configured via settings.py):
-  - Groq  (default, very fast, free tier available)
+  - Ollama (default, local LLM)
+  - Groq  (very fast, free tier available)
   - OpenAI-compatible endpoints
   - Stub / offline mode (no key required — returns raw text unchanged)
 """
@@ -13,6 +14,7 @@ Supported backends (configured via settings.py):
 import json
 import logging
 import os
+import requests
 from typing import Dict, List
 
 from django.conf import settings
@@ -129,6 +131,44 @@ def _correct_via_openai(regions: List[Dict], model: str, base_url: str) -> Dict[
 
 
 # ---------------------------------------------------------------------------
+# Ollama backend
+# ---------------------------------------------------------------------------
+
+def _correct_via_ollama(regions: List[Dict], model: str, base_url: str) -> Dict[int, str]:
+    """Call Ollama local endpoint."""
+    if not base_url:
+        base_url = "http://localhost:11434"
+
+    payload_json = _build_correction_payload(regions)
+    prompt = CORRECTION_PROMPT_TEMPLATE.format(regions_json=payload_json)
+
+    try:
+        response = requests.post(
+            f"{base_url.rstrip('/')}/api/chat",
+            json={
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt},
+                ],
+                "stream": False,
+                "options": {
+                    "temperature": 0.1,
+                    "num_predict": 4096
+                }
+            },
+            timeout=120
+        )
+        response.raise_for_status()
+        data = response.json()
+        raw_output = data.get("message", {}).get("content", "").strip()
+        return _parse_correction_response(raw_output)
+    except Exception as exc:
+        logger.error("Ollama correction call failed: %s", exc)
+        return {}
+
+
+# ---------------------------------------------------------------------------
 # Response parser
 # ---------------------------------------------------------------------------
 
@@ -163,14 +203,32 @@ def correct_regions(regions: List[Dict]) -> Dict[int, str]:
 
     Falls back to empty dict (no correction) if no LLM is configured.
     """
-    backend = getattr(settings, "AI_CORRECTION_BACKEND", "groq").lower()
-    model = getattr(settings, "AI_CORRECTION_MODEL", "llama-3.1-8b-instant")
-
-    if backend == "groq":
-        return _correct_via_groq(regions, model)
-    elif backend == "openai":
-        base_url = getattr(settings, "OPENAI_BASE_URL", "")
-        return _correct_via_openai(regions, model, base_url)
+    backend = getattr(settings, "AI_CORRECTION_BACKEND", "ollama").lower()
+    
+    if backend == "ollama":
+        model = getattr(settings, "AI_CORRECTION_MODEL", "llama3:8b")
     else:
-        logger.info("AI correction backend '%s' unknown — no correction applied.", backend)
-        return {}
+        model = getattr(settings, "AI_CORRECTION_MODEL", "llama-3.1-8b-instant")
+
+    # Chunking to handle LLM context limit
+    chunk_size = 15
+    all_corrections = {}
+
+    for i in range(0, len(regions), chunk_size):
+        chunk = regions[i:i + chunk_size]
+        
+        if backend == "groq":
+            res = _correct_via_groq(chunk, model)
+        elif backend == "openai":
+            base_url = getattr(settings, "OPENAI_BASE_URL", "")
+            res = _correct_via_openai(chunk, model, base_url)
+        elif backend == "ollama":
+            base_url = getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")
+            res = _correct_via_ollama(chunk, model, base_url)
+        else:
+            logger.info("AI correction backend '%s' unknown — no correction applied.", backend)
+            res = {}
+            
+        all_corrections.update(res)
+
+    return all_corrections

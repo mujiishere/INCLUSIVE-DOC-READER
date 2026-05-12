@@ -22,7 +22,6 @@ logger = logging.getLogger(__name__)
 # Add or remove groups here based on requirements.
 READER_GROUPS = [
     ["en", "hi"],
-    ["en", "ta"],
     ["en", "te"],
     ["en", "ur"]
 ]
@@ -106,12 +105,24 @@ def run_ocr_on_image(pil_image: Image.Image) -> List[Dict]:
     img_np = np.array(pil_image.convert("RGB"))
     all_detections = []
 
-    # ── 1. Run Multiple Readers ─────────────────────────────────────────────
+    # ── 1. Detect Bounding Boxes ONCE ───────────────────────────────────────
+    try:
+        primary_reader = _get_reader(READER_GROUPS[0], gpu=False)
+        horizontal_list, free_list = primary_reader.detect(img_np)
+    except ImportError:
+        return _fallback_ocr(pil_image)
+    except Exception as exc:
+        logger.error("EasyOCR detection failed: %s", exc)
+        return _fallback_ocr(pil_image)
+
+    # ── 2. Recognize using Multiple Readers ─────────────────────────────────
     for langs in READER_GROUPS:
         try:
             reader = _get_reader(langs, gpu=False)
-            results = reader.readtext(
+            results = reader.recognize(
                 img_np,
+                horizontal_list=horizontal_list[0],
+                free_list=free_list[0],
                 detail=1,
                 paragraph=False,
                 batch_size=4,
@@ -134,11 +145,14 @@ def run_ocr_on_image(pil_image: Image.Image) -> List[Dict]:
                     "confidence": float(prob),
                     "reader_lang": langs[1], # Store which reader found this
                 })
-        except ImportError:
-            return _fallback_ocr(pil_image)
         except Exception as exc:
-            logger.error("EasyOCR error for langs %s: %s", langs, exc)
+            logger.error("EasyOCR recognition error for langs %s: %s", langs, exc)
             continue
+
+    # Add Tesseract pass for languages unsupported or failing in EasyOCR (e.g. Tamil, Malayalam)
+    tess_detections = run_tesseract_for_langs(pil_image, "tam+mal")
+    if tess_detections:
+        all_detections.extend(tess_detections)
 
     if not all_detections:
         return []
@@ -200,3 +214,64 @@ def _fallback_ocr(pil_image: Image.Image) -> List[Dict]:
         "language": "en",
         "reading_order": 0,
     }]
+
+def run_tesseract_for_langs(pil_image: Image.Image, langs: str) -> List[Dict]:
+    """Extract line-level bounding boxes and text using Tesseract for specified languages."""
+    try:
+        import pytesseract
+        from pytesseract import Output
+        data = pytesseract.image_to_data(pil_image, lang=langs, output_type=Output.DICT)
+        detections = []
+        
+        # Group Tesseract word-level outputs into lines
+        lines = {}
+        n_boxes = len(data['text'])
+        for i in range(n_boxes):
+            text = data['text'][i].strip()
+            # Only consider non-empty text with reasonable confidence
+            try:
+                conf = int(data['conf'][i])
+            except ValueError:
+                conf = 0
+                
+            if text and conf > 10:
+                key = (data['block_num'][i], data['par_num'][i], data['line_num'][i])
+                if key not in lines:
+                    lines[key] = {
+                        "x1": data['left'][i],
+                        "y1": data['top'][i],
+                        "x2": data['left'][i] + data['width'][i],
+                        "y2": data['top'][i] + data['height'][i],
+                        "texts": [text],
+                        "confs": [conf]
+                    }
+                else:
+                    lines[key]["x1"] = min(lines[key]["x1"], data['left'][i])
+                    lines[key]["y1"] = min(lines[key]["y1"], data['top'][i])
+                    lines[key]["x2"] = max(lines[key]["x2"], data['left'][i] + data['width'][i])
+                    lines[key]["y2"] = max(lines[key]["y2"], data['top'][i] + data['height'][i])
+                    lines[key]["texts"].append(text)
+                    lines[key]["confs"].append(conf)
+                    
+        for key, line in lines.items():
+            text = " ".join(line["texts"])
+            avg_conf = sum(line["confs"]) / len(line["confs"]) / 100.0
+            x = line["x1"]
+            y = line["y1"]
+            w = line["x2"] - line["x1"]
+            h = line["y2"] - line["y1"]
+            
+            # Map Tesseract language codes to our ISO codes for logging/consistency
+            reader_lang = "ta" if "tam" in langs else ("ml" if "mal" in langs else "en")
+            
+            detections.append({
+                "bbox": [x, y, w, h],
+                "raw_text": text,
+                "confidence": float(avg_conf),
+                "reader_lang": reader_lang,
+            })
+        return detections
+    except Exception as exc:
+        err_msg = str(exc).split('\n')[0]
+        logger.warning("Tesseract pass skipped for %s (install tesseract-ocr to enable): %s", langs, err_msg)
+        return []

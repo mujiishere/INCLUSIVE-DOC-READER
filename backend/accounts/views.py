@@ -122,6 +122,19 @@ def admin_summary_view(request):
         ]
     ).count()
     failed_documents = Document.objects.filter(status=Document.Status.FAILED).count()
+    
+    # Real-time user uploads (last 10)
+    recent_docs = Document.objects.select_related('user').order_by('-created_at')[:10]
+    recent_uploads = [
+        {
+            "id": d.id,
+            "title": d.title,
+            "username": d.user.username if d.user else "Unknown",
+            "status": d.status,
+            "created_at": d.created_at
+        }
+        for d in recent_docs
+    ]
 
     return Response(
         {
@@ -132,50 +145,95 @@ def admin_summary_view(request):
             "completed_documents": completed_documents,
             "processing_documents": processing_documents,
             "failed_documents": failed_documents,
+            "recent_uploads": recent_uploads,
         }
     )
 
 
-@api_view(["GET"])
+@api_view(["GET", "POST", "PUT", "DELETE"])
 def admin_users_view(request):
-    """Return a list of user accounts for admin user management UI."""
+    """Admin user management API (CRUD)."""
     if not request.user.is_staff:
         return Response({"error": "Admin access required."}, status=status.HTTP_403_FORBIDDEN)
 
-    users = User.objects.annotate(
-        documents_uploaded=Count("documents", distinct=True),
-        documents_completed=Count(
-            "documents",
-            filter=Q(documents__status="completed"),
-            distinct=True,
-        ),
-        documents_processing=Count(
-            "documents",
-            filter=Q(documents__status__in=["pending", "ocr_processing", "ai_correction"]),
-            distinct=True,
-        ),
-        documents_failed=Count(
-            "documents",
-            filter=Q(documents__status="failed"),
-            distinct=True,
-        ),
-    ).order_by("username")
-    payload = [
-        {
-            "id": user.id,
-            "username": user.username,
-            "email": user.email,
-            "is_active": user.is_active,
-            "is_staff": user.is_staff,
-            "documents_uploaded": user.documents_uploaded,
-            "documents_completed": user.documents_completed,
-            "documents_processing": user.documents_processing,
-            "documents_failed": user.documents_failed,
-        }
-        for user in users
-    ]
+    if request.method == "GET":
+        users = User.objects.annotate(
+            documents_uploaded=Count("documents", distinct=True),
+            documents_completed=Count(
+                "documents",
+                filter=Q(documents__status="completed"),
+                distinct=True,
+            ),
+            documents_processing=Count(
+                "documents",
+                filter=Q(documents__status__in=["pending", "ocr_processing", "ai_correction"]),
+                distinct=True,
+            ),
+            documents_failed=Count(
+                "documents",
+                filter=Q(documents__status="failed"),
+                distinct=True,
+            ),
+        ).order_by("username")
+        payload = [
+            {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "is_active": user.is_active,
+                "is_staff": user.is_staff,
+                "documents_uploaded": user.documents_uploaded,
+                "documents_completed": user.documents_completed,
+                "documents_processing": user.documents_processing,
+                "documents_failed": user.documents_failed,
+            }
+            for user in users
+        ]
+        return Response(payload)
 
-    return Response(payload)
+    elif request.method == "POST":
+        data = request.data
+        if User.objects.filter(username=data.get("username")).exists():
+            return Response({"error": "Username already exists"}, status=status.HTTP_400_BAD_REQUEST)
+        user = User.objects.create_user(
+            username=data.get("username"),
+            email=data.get("email", ""),
+            password=data.get("password"),
+            is_staff=data.get("is_staff", False),
+            is_active=data.get("is_active", True)
+        )
+        return Response({"message": "User created", "id": user.id}, status=status.HTTP_201_CREATED)
+
+    elif request.method == "PUT":
+        data = request.data
+        try:
+            user = User.objects.get(id=data.get("id"))
+            if "username" in data and data["username"] != user.username:
+                if User.objects.filter(username=data["username"]).exists():
+                    return Response({"error": "Username already exists"}, status=status.HTTP_400_BAD_REQUEST)
+                user.username = data["username"]
+            if "email" in data:
+                user.email = data["email"]
+            if "password" in data and data["password"]:
+                user.set_password(data["password"])
+            if "is_staff" in data:
+                user.is_staff = data["is_staff"]
+            if "is_active" in data:
+                user.is_active = data["is_active"]
+            user.save()
+            return Response({"message": "User updated"})
+        except User.DoesNotExist:
+            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    elif request.method == "DELETE":
+        try:
+            user = User.objects.get(id=request.data.get("id"))
+            if user == request.user:
+                return Response({"error": "Cannot delete yourself"}, status=status.HTTP_400_BAD_REQUEST)
+            user.delete()
+            return Response({"message": "User deleted"})
+        except User.DoesNotExist:
+            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
 
 
 @api_view(["GET"])

@@ -256,7 +256,7 @@ function DocumentViewerPage() {
                 type: format === "json" ? "application/json" : "text/plain",
             });
             const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
+            const a = window.document.createElement("a");
             a.href = url;
             a.download = `${document?.original_filename || id}.${format}`;
             a.click();
