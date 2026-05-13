@@ -37,6 +37,9 @@ function DocumentListPage() {
     const [errorMessage, setErrorMessage] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [deletingId, setDeletingId] = useState(null);
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [deleteTargetDoc, setDeleteTargetDoc] = useState(null);
+    const [deleteErrorMessage, setDeleteErrorMessage] = useState("");
     const pollRef = useRef(null);
 
     useEffect(() => {
@@ -125,14 +128,33 @@ function DocumentListPage() {
         if (e.key === "Enter") handleSearch();
     }
 
-    async function handleDelete(doc) {
-        if (!window.confirm(`Delete "${doc.title || doc.original_filename}"? This cannot be undone.`)) return;
-        setDeletingId(doc.id);
+    function openDeleteModal(doc) {
+        setDeleteTargetDoc(doc);
+        setDeleteErrorMessage("");
+        setIsDeleteModalOpen(true);
+    }
+
+    function closeDeleteModal() {
+        if (deletingId) {
+            return;
+        }
+        setIsDeleteModalOpen(false);
+        setDeleteTargetDoc(null);
+        setDeleteErrorMessage("");
+    }
+
+    async function handleDeleteConfirm() {
+        if (!deleteTargetDoc) {
+            return;
+        }
+
+        setDeletingId(deleteTargetDoc.id);
         try {
-            await deleteDocument(doc.id);
-            setDocuments((prev) => prev.filter((d) => d.id !== doc.id));
+            await deleteDocument(deleteTargetDoc.id);
+            setDocuments((prev) => prev.filter((d) => d.id !== deleteTargetDoc.id));
+            closeDeleteModal();
         } catch (err) {
-            setErrorMessage(getApiErrorMessage(err));
+            setDeleteErrorMessage(getApiErrorMessage(err));
         } finally {
             setDeletingId(null);
         }
@@ -240,7 +262,7 @@ function DocumentListPage() {
                             </Link>
                             <button
                                 className="btn-danger"
-                                onClick={() => handleDelete(doc)}
+                                onClick={() => openDeleteModal(doc)}
                                 disabled={deletingId === doc.id}
                                 style={{ width: "auto", padding: "8px 14px", margin: 0 }}
                                 title="Delete document"
@@ -251,6 +273,40 @@ function DocumentListPage() {
                     </article>
                 ))}
             </div>
+
+            {isDeleteModalOpen && (
+                <div className="app-modal-overlay">
+                    <div className="glass-card app-modal" style={{ width: "min(500px, 92vw)", border: "1px solid var(--danger-border)" }}>
+                        <h3 style={{ marginTop: 0, marginBottom: 10, color: "var(--danger)" }}>Delete Document</h3>
+                        <p className="muted-text" style={{ marginTop: 0, marginBottom: 14 }}>
+                            Do you want to delete <strong style={{ color: "var(--text-main)" }}>{deleteTargetDoc?.title || deleteTargetDoc?.original_filename || `Document #${deleteTargetDoc?.id}`}</strong>?
+                        </p>
+
+                        {deleteErrorMessage && <p className="error-msg" style={{ marginTop: 4 }}>{deleteErrorMessage}</p>}
+
+                        <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 12 }}>
+                            <button
+                                type="button"
+                                className="btn-ghost"
+                                onClick={closeDeleteModal}
+                                disabled={Boolean(deletingId)}
+                                style={{ width: "auto", margin: 0, padding: "10px 16px" }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                className="btn-danger"
+                                onClick={handleDeleteConfirm}
+                                disabled={Boolean(deletingId)}
+                                style={{ width: "auto", margin: 0, padding: "10px 16px" }}
+                            >
+                                {Boolean(deletingId) ? "Deleting..." : "Yes"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </section>
     );
 }

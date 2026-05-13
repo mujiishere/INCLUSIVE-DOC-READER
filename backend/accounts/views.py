@@ -157,6 +157,7 @@ def admin_users_view(request):
         return Response({"error": "Admin access required."}, status=status.HTTP_403_FORBIDDEN)
 
     if request.method == "GET":
+        query = request.GET.get("q", "").strip()
         users = User.objects.annotate(
             documents_uploaded=Count("documents", distinct=True),
             documents_completed=Count(
@@ -174,7 +175,11 @@ def admin_users_view(request):
                 filter=Q(documents__status="failed"),
                 distinct=True,
             ),
-        ).order_by("username")
+        )
+        if query:
+            users = users.filter(Q(username__icontains=query) | Q(email__icontains=query))
+
+        users = users.order_by("username")
         payload = [
             {
                 "id": user.id,
@@ -208,6 +213,21 @@ def admin_users_view(request):
         data = request.data
         try:
             user = User.objects.get(id=data.get("id"))
+
+            # Safety: prevent admins from removing their own admin access
+            # or disabling themselves, which would lock out admin actions.
+            if user == request.user:
+                if "is_staff" in data and not bool(data["is_staff"]):
+                    return Response(
+                        {"error": "You cannot remove your own admin privilege."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if "is_active" in data and not bool(data["is_active"]):
+                    return Response(
+                        {"error": "You cannot disable your own account."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
             if "username" in data and data["username"] != user.username:
                 if User.objects.filter(username=data["username"]).exists():
                     return Response({"error": "Username already exists"}, status=status.HTTP_400_BAD_REQUEST)

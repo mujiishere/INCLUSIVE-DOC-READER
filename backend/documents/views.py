@@ -560,7 +560,7 @@ def search_documents(request):
 # ---------------------------------------------------------------------------
 
 @api_view(["GET"])
-def export_document(request, pk):
+def export_document(request, pk, fmt=None):
     """
     Export document text as TXT or JSON.
 
@@ -571,7 +571,7 @@ def export_document(request, pk):
     except Document.DoesNotExist:
         return Response({"error": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-    fmt = request.GET.get("format", "txt").lower()
+    fmt = (fmt or request.GET.get("format", "txt")).lower().lstrip(".")
 
     if fmt == "json":
         export_data = {

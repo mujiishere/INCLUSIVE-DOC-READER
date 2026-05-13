@@ -53,4 +53,5 @@ urlpatterns = [
 
     # Export
     path("documents/<int:pk>/export/", export_document, name="document-export"),
+    path("documents/<int:pk>/export.<str:fmt>", export_document, name="document-export-with-ext"),
 ]

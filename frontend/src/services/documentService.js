@@ -146,11 +146,21 @@ export function getExportUrl(docId, format = "txt") {
 }
 
 export async function exportDocument(docId, format = "txt") {
-    const response = await api.get(`/documents/${docId}/export/`, {
-        params: { format },
-        responseType: "blob",
-    });
-    return response;
+    const normalizedFormat = (format || "txt").toLowerCase();
+
+    try {
+        return await api.get(`/documents/${docId}/export/`, {
+            params: { format: normalizedFormat },
+            responseType: "blob",
+        });
+    } catch (error) {
+        if (normalizedFormat === "txt" && error?.response?.status === 404) {
+            return api.get(`/documents/${docId}/export.txt`, {
+                responseType: "blob",
+            });
+        }
+        throw error;
+    }
 }
 
 

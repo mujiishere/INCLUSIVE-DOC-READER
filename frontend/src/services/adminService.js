@@ -8,8 +8,13 @@ export async function getAdminSummary() {
 }
 
 
-export async function getAdminUsers() {
-    const response = await api.get("/admin/users/");
+export async function getAdminUsers(query = "") {
+    const params = {};
+    if (query.trim()) {
+        params.q = query.trim();
+    }
+
+    const response = await api.get("/admin/users/", { params });
     return response.data;
 }
 

@@ -790,6 +790,36 @@ button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
 .users-head  { color: var(--text-muted); }
 .users-row   { border-top: 1px solid var(--border); padding-top: 12px; }
 
+.app-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    display: grid;
+    place-items: center;
+    z-index: 100;
+    animation: modalFadeIn 0.18s ease;
+}
+
+.app-modal {
+    animation: modalPopIn 0.2s ease;
+}
+
+@keyframes modalFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes modalPopIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
 /* ── Highlight ───────────────────────────────────────────────────────────── */
 
 mark {

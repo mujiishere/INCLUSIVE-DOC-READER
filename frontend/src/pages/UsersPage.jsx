@@ -1,6 +1,6 @@
 // Users page used by admin to view and manage account list.
 import { useEffect, useState } from "react";
-import { Edit2, Trash2, Plus, X } from "lucide-react";
+import { Edit2, Trash2, Plus, Search, X } from "lucide-react";
 
 import { getApiErrorMessage } from "../services/api";
 import { getAdminUsers, createUser, updateUser, deleteUser } from "../services/adminService";
@@ -9,18 +9,33 @@ import { getAdminUsers, createUser, updateUser, deleteUser } from "../services/a
 function UsersPage() {
     const [users, setUsers] = useState([]);
     const [errorMessage, setErrorMessage] = useState("");
+    const [searchQuery, setSearchQuery] = useState("");
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [deleteTargetUser, setDeleteTargetUser] = useState(null);
+    const [deleteConfirmText, setDeleteConfirmText] = useState("");
+    const [deleteErrorMessage, setDeleteErrorMessage] = useState("");
+    const [isDeleting, setIsDeleting] = useState(false);
     const [editingUser, setEditingUser] = useState(null);
     const [formData, setFormData] = useState({ username: "", email: "", password: "", is_staff: false, is_active: true });
 
     useEffect(() => {
-        loadUsers();
-    }, []);
+        if (!searchQuery.trim()) {
+            loadUsers("");
+            return;
+        }
 
-    async function loadUsers() {
+        const timer = setTimeout(() => {
+            loadUsers(searchQuery);
+        }, 250);
+
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
+
+    async function loadUsers(query = "") {
         setErrorMessage("");
         try {
-            const data = await getAdminUsers();
+            const data = await getAdminUsers(query);
             setUsers(data);
         } catch (error) {
             setErrorMessage(getApiErrorMessage(error));
@@ -61,19 +76,44 @@ function UsersPage() {
                 await createUser(formData);
             }
             closeModal();
-            loadUsers();
+            loadUsers(searchQuery);
         } catch (error) {
             setErrorMessage(getApiErrorMessage(error));
         }
     }
 
-    async function handleDelete(id) {
-        if (!window.confirm("Are you sure you want to delete this user?")) return;
+    function openDeleteModal(user) {
+        setDeleteTargetUser(user);
+        setDeleteConfirmText("");
+        setDeleteErrorMessage("");
+        setIsDeleteModalOpen(true);
+    }
+
+    function closeDeleteModal() {
+        if (isDeleting) {
+            return;
+        }
+        setIsDeleteModalOpen(false);
+        setDeleteTargetUser(null);
+        setDeleteConfirmText("");
+        setDeleteErrorMessage("");
+    }
+
+    async function handleDeleteConfirm() {
+        if (!deleteTargetUser) {
+            return;
+        }
+
         try {
-            await deleteUser(id);
-            loadUsers();
+            setIsDeleting(true);
+            setDeleteErrorMessage("");
+            await deleteUser(deleteTargetUser.id);
+            closeDeleteModal();
+            loadUsers(searchQuery);
         } catch (error) {
-            setErrorMessage(getApiErrorMessage(error));
+            setDeleteErrorMessage(getApiErrorMessage(error));
+        } finally {
+            setIsDeleting(false);
         }
     }
 
@@ -99,6 +139,19 @@ function UsersPage() {
             {errorMessage && !isModalOpen && <p className="error-msg" style={{ margin: "16px 0" }}>{errorMessage}</p>}
 
             <div className="glass-card" style={{ overflowX: "auto" }}>
+                <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
+                    <div className="header-search-trigger" style={{ width: "min(560px, 100%)" }}>
+                        <Search className="header-search-icon" size={16} />
+                        <input
+                            type="text"
+                            className="header-search-input"
+                            placeholder="Search by username or email"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                        />
+                    </div>
+                </div>
+
                 <div className="section-row users-head" style={{ display: "grid", gridTemplateColumns: "1.5fr 2fr 1fr 1fr 1fr 1fr 1fr 1fr 100px", gap: "10px", paddingBottom: "10px", fontWeight: "600" }}>
                     <span>Username</span>
                     <span>Email</span>
@@ -123,7 +176,7 @@ function UsersPage() {
                         <span>{user.documents_failed ?? 0}</span>
                         <div style={{ display: "flex", gap: "6px", justifyContent: "flex-end" }}>
                             <button className="btn-icon" onClick={() => openModal(user)} title="Edit User"><Edit2 size={16} /></button>
-                            <button className="btn-icon" onClick={() => handleDelete(user.id)} title="Delete User" style={{ color: "var(--danger)" }}><Trash2 size={16} /></button>
+                            <button className="btn-icon" onClick={() => openDeleteModal(user)} title="Delete User" style={{ color: "var(--danger)" }}><Trash2 size={16} /></button>
                         </div>
                     </div>
                 ))}
@@ -132,8 +185,8 @@ function UsersPage() {
 
             {/* Modal */}
             {isModalOpen && (
-                <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "grid", placeItems: "center", zIndex: 100 }}>
-                    <div className="glass-card" style={{ width: "min(400px, 90vw)", position: "relative" }}>
+                <div className="app-modal-overlay">
+                    <div className="glass-card app-modal" style={{ width: "min(400px, 90vw)", position: "relative" }}>
                         <button className="btn-icon" onClick={closeModal} style={{ position: "absolute", top: "16px", right: "16px" }}><X size={20} /></button>
                         <h3 style={{ marginTop: 0, marginBottom: "20px" }}>{editingUser ? "Edit User" : "Add New User"}</h3>
                         {errorMessage && <p className="error-msg" style={{ marginBottom: "16px" }}>{errorMessage}</p>}
@@ -163,6 +216,55 @@ function UsersPage() {
                             </div>
                             <button type="submit" style={{ marginTop: "20px", width: "100%" }}>{editingUser ? "Save Changes" : "Create User"}</button>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {isDeleteModalOpen && (
+                <div className="app-modal-overlay">
+                    <div className="glass-card app-modal" style={{ width: "min(480px, 92vw)", border: "1px solid var(--danger-border)" }}>
+                        <h3 style={{ marginTop: 0, marginBottom: 10, color: "var(--danger)" }}>Delete User</h3>
+                        <p className="muted-text" style={{ marginTop: 0, marginBottom: 6 }}>
+                            Are you sure you want to delete <strong style={{ color: "var(--text-main)" }}>{deleteTargetUser?.username}</strong>?
+                        </p>
+                        <p className="error-msg" style={{ marginBottom: 14 }}>
+                            This action is permanent and cannot be undone. To confirm deletion, type <strong>CONFIRM</strong> below.
+                        </p>
+
+                        <label style={{ fontSize: "0.88rem", fontWeight: 600, color: "var(--text-main)" }}>
+                            Confirmation
+                        </label>
+                        <input
+                            type="text"
+                            placeholder="Type CONFIRM to continue"
+                            value={deleteConfirmText}
+                            onChange={(e) => setDeleteConfirmText(e.target.value)}
+                            disabled={isDeleting}
+                            autoFocus
+                        />
+
+                        {deleteErrorMessage && <p className="error-msg" style={{ marginTop: 4 }}>{deleteErrorMessage}</p>}
+
+                        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8 }}>
+                            <button
+                                type="button"
+                                className="btn-ghost"
+                                onClick={closeDeleteModal}
+                                disabled={isDeleting}
+                                style={{ width: "auto", margin: 0, padding: "10px 16px" }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                className="btn-danger"
+                                onClick={handleDeleteConfirm}
+                                disabled={deleteConfirmText !== "CONFIRM" || isDeleting}
+                                style={{ width: "auto", margin: 0, padding: "10px 16px" }}
+                            >
+                                {isDeleting ? "Deleting..." : "Permanently Delete User"}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
